@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.0
+*  Backbone.RailsStore - version 1.0.1
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -754,8 +754,8 @@ class Backbone.RailsModel extends Backbone.Model
     constructor - register model in Store and proceed
   ###
   constructor: (attr, options) ->
-    super
     @_store = Backbone.RailsStore.getInstance()
+    super
     @_store.registerModel(@,options||{})
     unless @attributes.created_at
       @set({created_at: new Date(),updated_at: new Date()},{silent:true})
@@ -769,6 +769,9 @@ class Backbone.RailsModel extends Backbone.Model
   ###
   fetch: (options) ->
     options.models = [@]
+    success = options.success
+    options.success = =>
+      success(@) if success
     @_store.refresh options
 
   ###

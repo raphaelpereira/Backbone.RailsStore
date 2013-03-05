@@ -1,7 +1,7 @@
 ###
 #  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 #
-#  Backbone.RailsStore - version 1.0.0
+#  Backbone.RailsStore - version 1.0.1
 #
 #  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 #  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -351,11 +351,11 @@ class BackboneRailsStoreController < ApplicationController
     # Include eager loading
     models.each do |key, model_info|
       klass = model_info[:railsClass].constantize
-      fill_eager_refresh(klass, model_info[:ids], models_eager)
+      fill_eager_refresh(klass, model_info[:ids], models_eager) if model_info[:ids].is_a?(Array)
     end
 
     models.merge!(models_eager[:models]) do |key, v1, v2|
-      v1[:ids].concat(v2[:ids])
+      v1[:ids].concat(v2[:ids]) if v1[:ids].is_a?(Array) and v2[:ids].is_a?(Array)
       v1
     end
 
@@ -370,7 +370,8 @@ class BackboneRailsStoreController < ApplicationController
 
     models.each do |key, model_info|
       # TODO: in case model has been erased on server, notify
-      server_models = model_info[:railsClass].constantize.where(:id => model_info[:ids].uniq)
+      ids = model_info[:ids] || []
+      server_models = model_info[:railsClass].constantize.where(:id => ids.uniq)
       resp_models[model_info[:railsClass]] = server_models
     end
     return response
@@ -380,6 +381,7 @@ class BackboneRailsStoreController < ApplicationController
     return unless klass.respond_to?(:rails_store_eager)
     klass.rails_store_eager.each do |relation|
       relation_reflection = klass.reflect_on_association(relation)
+      raise "Invalid relation #{relation} on #{klass}!" unless relation_reflection
       relation_class = relation_reflection.class_name
       models_eager[:models][relation_class] = {
           :railsClass => relation_class,
