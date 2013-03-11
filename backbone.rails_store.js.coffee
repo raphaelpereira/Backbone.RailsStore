@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.1
+*  Backbone.RailsStore - version 1.0.3
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -146,18 +146,23 @@ class Backbone.RailsStore
       storeSync: true
       silent: true
       success: (model, resp) =>
-        if model.get('errors') or not model.get('authModel')
-          @trigger('authenticate:failed')
+        try
+          if model.get('errors') or not model.get('authModel')
+            @trigger('authenticate:failed')
+            options.error() if options.error
+            return
+          @_processServerModelsResponse(model)
+          @_processServerRelationsResponse(model)
+          @reportSyncChanges()
+          authModelData = model.get('authModel')
+          model.unset('authModel')
+          authModel = @findById(authModelData.railsClass, authModelData.id)
+          @trigger('authenticate:done', authModel)
+          options.success(authModel) if options.success
+        catch e
+          console.log(e)
           options.error() if options.error
-          return
-        @_processServerModelsResponse(model)
-        @_processServerRelationsResponse(model)
-        @reportSyncChanges()
-        authModelData = model.get('authModel')
-        model.unset('authModel')
-        authModel = @findById(authModelData.railsClass, authModelData.id)
-        @trigger('authenticate:done', authModel)
-        options.success(authModel) if options.success
+          @trigger('authenticate:failed')
       error: =>
         options.error() if options.error
         @trigger('authenticate:failed')
@@ -220,44 +225,50 @@ class Backbone.RailsStore
       page: options.page
 
     @_storeServer.urlRoot = @_storeServer.findUrlRoot
-    xhr = @_storeServer.fetch({
+    xhr = @_storeServer.fetch
       data: $.param({searchModels: request})
       type: 'POST'
       storeSync: true
       silent: true
       success: (model, resp) =>
-        searchTarget = null
-        if @_searchedModels[options.modelType]
-          if @_searchedModels[options.modelType][col_cid]
-            searchTarget = @_searchedModels[options.modelType][col_cid]
-        reportExists = false
-        @_processServerModelsResponse(model)
-        @_processServerRelationsResponse(model)
-        @reportSyncChanges()
-        pageData = model.get('pageData')[options.modelType]
-        if pageData and searchTarget
-          searchTarget.subset.pageData = pageData
-          if pageData.pageSize > 0
-            firstId = (pageData.actualPage-1)*pageData.pageSize
-            lastId = (pageData.actualPage)*pageData.pageSize
-            pageObjIds = pageData.ids.slice(firstId,lastId)
-          else
-            pageObjIds = pageData.ids
-          _.each pageObjIds, (id) =>
-            m = @findById(options.modelType, id)
-            searchTarget.ids.push(m.cid)
-        searchTarget.subset.refresh() if searchTarget
-        model.unset('pageData')
-        if options.success and searchTarget
-          options.success(searchTarget.subset.child)
-        @trigger('find:exists', @) if reportExists
-        @trigger('find:empty',@) if not reportExists
-        @trigger('find:done', @)
+        try
+          searchTarget = null
+          if @_searchedModels[options.modelType]
+            if @_searchedModels[options.modelType][col_cid]
+              searchTarget = @_searchedModels[options.modelType][col_cid]
+          reportExists = false
+          @_processServerModelsResponse(model)
+          @_processServerRelationsResponse(model)
+          @reportSyncChanges()
+          pageData = model.get('pageData')[options.modelType]
+          if pageData and searchTarget
+            searchTarget.subset.pageData = pageData
+            if pageData.pageSize > 0
+              firstId = (pageData.actualPage-1)*pageData.pageSize
+              lastId = (pageData.actualPage)*pageData.pageSize
+              pageObjIds = pageData.ids.slice(firstId,lastId)
+            else
+              pageObjIds = pageData.ids
+            _.each pageObjIds, (id) =>
+              m = @findById(options.modelType, id)
+              searchTarget.ids.push(m.cid)
+          searchTarget.subset.refresh() if searchTarget
+          model.unset('pageData')
+          if options.success and searchTarget
+            options.success(searchTarget.subset.child)
+          @trigger('find:exists', @) if reportExists
+          @trigger('find:empty',@) if not reportExists
+          @trigger('find:done', @)
+        catch e
+          console.log(e)
+          if options.error
+            options.error.apply(@,arguments)
+          @trigger('find:failed', @)
       error: =>
         if options.error
           options.error.apply(@,arguments)
         @trigger('find:failed', @)
-    })
+
     @trigger('find:start', @)
     @_doProgress(xhr)
     return @_searchedModels[options.modelType][col_cid].subset.child
@@ -293,56 +304,59 @@ class Backbone.RailsStore
     @_storeServer.set('destroyModels', destroyData)
     @_storeServer.set('createRelations', createRelationData)
     @_storeServer.set('destroyRelations', destroyRelationData)
-    xhr = @_storeServer.save(null, {
+    xhr = @_storeServer.save null,
       silent: true
       storeSync: true
       success: (model) =>
-        # Treat errors
-        errors =  model.get('errors')
-        if errors
-          modelType = @getModelType(errors.railsClass)
-          model = @_storeLocally(modelType, errors.model)
-          model.dirty = true if not model.id
-          errors = errors.errors
-          model.trigger 'commit:failed',
-            model: model,
-            errors: errors
-        else
-          triggerModels = []
-          _.each @_changedModels, (changedModels, modelType) =>
-            _.each changedModels, (changedModel) =>
-              triggerModels.push(changedModel)
-          _.each model.get('modelsIds'), (idsData, modelType) =>
-            _.each idsData, (id, cid) =>
-              storedModel = @findById(modelType, cid)
-              if not storedModel
-                throw "Didn't find local model with cid! API BUG!"
-              storedModel.set('id', id)
-              @reportSync(storedModel)
-          @_processServerModelsResponse(model)
-          @_processServerRelationsResponse(model)
-          @_changedModels = {}
-          @_deletedModels.length = 0
-          @_manyToManyCreate = {}
-          @_manyToManyDestroy = {}
+        try
+          # Treat errors
+          errors =  model.get('errors')
+          if errors
+            modelType = @getModelType(errors.railsClass)
+            model = @_storeLocally(modelType, errors.model)
+            model.dirty = true if not model.id
+            errors = errors.errors
+            model.trigger 'commit:failed',
+              model: model,
+              errors: errors
+          else
+            triggerModels = []
+            _.each @_changedModels, (changedModels, modelType) =>
+              _.each changedModels, (changedModel) =>
+                triggerModels.push(changedModel)
+            _.each model.get('modelsIds'), (idsData, modelType) =>
+              _.each idsData, (id, cid) =>
+                storedModel = @findById(modelType, cid)
+                if not storedModel
+                  throw "Didn't find local model with cid! API BUG!"
+                storedModel.set('id', id)
+                @reportSync(storedModel)
+            @_processServerModelsResponse(model)
+            @_processServerRelationsResponse(model)
+            @_changedModels = {}
+            @_deletedModels.length = 0
+            @_manyToManyCreate = {}
+            @_manyToManyDestroy = {}
 
-        @_storeServer.unset('commitModels')
-        @_storeServer.unset('destroyModels')
-        @_storeServer.unset('modelsIds')
-        @_storeServer.unset('createRelations')
-        @_storeServer.unset('destroyRelations')
-        @_storeServer.unset('models')
-        @_storeServer.unset('errors')
-        _.each triggerModels, (changedModel) =>
-          changedModel.trigger 'commit:done', changedModel
-        @trigger('commit:done', @) if not errors
-        @trigger('commit:failed', {model: model, errors: errors}) if errors
-        # TODO: handle rollback
-        ##model.release() if model.dirty
+          @_storeServer.unset('commitModels')
+          @_storeServer.unset('destroyModels')
+          @_storeServer.unset('modelsIds')
+          @_storeServer.unset('createRelations')
+          @_storeServer.unset('destroyRelations')
+          @_storeServer.unset('models')
+          @_storeServer.unset('errors')
+          _.each triggerModels, (changedModel) =>
+            changedModel.trigger 'commit:done', changedModel
+          @trigger('commit:done', @) if not errors
+          @trigger('commit:failed', {model: model, errors: errors}) if errors
+          # TODO: handle rollback
+        catch e
+          console.log(e)
+          @trigger('commit:failed', {errors: "Communication error!"})
       error: =>
         # TODO: i18n
         @trigger('commit:failed', {errors: "Communication error!"})
-    })
+
     @trigger('commit:start')
     @_doProgress(xhr)
 
@@ -398,7 +412,7 @@ class Backbone.RailsStore
               ids: []
           request[modelType].ids = request[modelType].ids.concat(data.ids)
 
-    unless request
+    unless request or relations
       request = {}
       _.each @_collections, (collection) =>
         collection.each (model) =>
@@ -410,10 +424,11 @@ class Backbone.RailsStore
               ids: []
           request[modelType].ids.push(model.id)
 
-    request = {refreshModels: request}
+    request = {refreshModels: request} if request
+    request = {} unless request
     request.relations = relations if relations
 
-    unless _.size(request.refreshModels) and not _.size(request.relations)
+    if _.size(request.refreshModels) == 0 and _.size(request.relations) == 0
       @trigger('refresh:start')
       @trigger('refresh:done')
       return
@@ -425,11 +440,15 @@ class Backbone.RailsStore
       storeSync: true
       silent: true
       success: (model, resp, options) =>
-        @_processServerModelsResponse(model)
-        @_processServerRelationsResponse(model)
-        @reportSyncChanges()
-        @trigger('refresh:done', @)
-        success() if success
+        try
+          @_processServerModelsResponse(model)
+          @_processServerRelationsResponse(model)
+          @reportSyncChanges()
+          @trigger('refresh:done', @)
+          success() if success
+        catch e
+          console.log(e)
+          @trigger('refresh:failed')
       error: ->
         @trigger('refresh:failed')
 
@@ -468,10 +487,14 @@ class Backbone.RailsStore
       storeSync: true
       silent: true
       success: (model) =>
-        @_processServerModelsResponse(model)
-        @_processServerRelationsResponse(model)
-        @reportSyncChanges()
-        @trigger('service:done', @)
+        try
+          @_processServerModelsResponse(model)
+          @_processServerRelationsResponse(model)
+          @reportSyncChanges()
+          @trigger('service:done', @)
+        catch e
+          console.log(e)
+          @trigger('service:failed', resp)
       error: (resp) =>
         @trigger('service:failed', resp)
     @trigger('service:start', @)
@@ -560,7 +583,7 @@ class Backbone.RailsStore
           Role:
             [c1,3]
   ###
-  reportManyToManyEvent: (options) ->
+  reportManyRelationEvent: (options) ->
     if options.add
       _.each options.add, (sources, sourceType) =>
         _.each sources, (relations, sourceId) =>
@@ -857,10 +880,12 @@ class Backbone.RailsModel extends Backbone.Model
 
     Parameters:
       attr - attribute name
-      lazyLoad - if attr is a relation and lazyLoad is set, it will be called when
-        relation has been refreshed from server
+      options - options to be used in caso of relations. Available options:
+        remoteRefresh - true/false/first - if set to true will refresh relations
+          from server. If set to first, only refresh on first get.
+        lazyLoad - function - called when models has been loaded from server
   ###
-  get: (attr, lazyLoad) ->
+  get: (attr, options) ->
     ## Check if any attribute is actually a relation
     ## In that case, call relation model object get method
     result = null
@@ -897,23 +922,18 @@ class Backbone.RailsModel extends Backbone.Model
       return val
 
     # Check if this is a belongsTo relation
+    options = options || {}
     if @belongsTo[attr]
       val_id = @get("#{attr}_id")
       if val_id
         modelType = _.result(@belongsTo,attr)
         model = @_store.findById(modelType, val_id)
-        lazyLoad(model) if model and _.isFunction(lazyLoad)
+        options.lazyLoad(model) if model and _.isFunction(options.lazyLoad)
         return model if model
         model = new modelType({id:val_id},{silent:true})
         @_store.refresh
           models: [model]
-
-        if _.isFunction(lazyLoad)
-          refreshDone = =>
-            @_store.off 'refresh:done', refreshDone
-            lazyLoad(model)
-
-          @_store.on 'refresh:done', refreshDone
+          success: => options.lazyLoad(model) if _.isFunction(options.lazyLoad)
 
         return model
       return null
@@ -923,17 +943,25 @@ class Backbone.RailsModel extends Backbone.Model
       @_hasOneCache = {} unless @_hasOneCache
       @_hasOneCache[@cid] = {col: null, ids: []} unless @_hasOneCache[@cid]
       if not @_hasOneCache[@cid].col
+        if options.remoteRefresh
+          remoteRefresh = true
+        else
+          remoteRefresh = false
         relationModelType = _.result(@hasOne, attr)
         other_col = @_store.getCollectionFromModel(relationModelType)
         @_hasOneCache[@cid].col = new Backbone.RailsHasOneRelation
           parent: other_col
           relatedModel: @
-          lazyLoad: lazyLoad
+          remoteRefresh: remoteRefresh
+          lazyLoad: options.lazyLoad
           hasOneCache: @_hasOneCache
           relationModelType: relationModelType
           attribute: attr
-      else if _.isFunction(lazyLoad)
-        lazyLoad(@_hasOneCache[@cid].col.child.first())
+      else if options.remoteRefresh and options.remoteRefresh != 'first'
+        @_hasOneCache[@cid].col.remoteRefresh
+          lazyLoad: options.lazyLoad
+      else if _.isFunction(options.lazyLoad)
+        options.lazyLoad(@_hasOneCache[@cid].col.child.first())
       return @_hasOneCache[@cid].col.child.first()
 
     # Check if this is a hasMany relation
@@ -941,15 +969,23 @@ class Backbone.RailsModel extends Backbone.Model
       opts = @hasMany[attr]
       opts.subset = {} unless opts.subset
       if not opts.subset[@cid]
+        if options.remoteRefresh
+          remoteRefresh = true
+        else
+          remoteRefresh = false
         other_col = @_store.getCollectionFromModel(_.result(opts, 'modelType'))
         opts.subset[@cid] = new Backbone.RailsHasManyRelationCollection
           parent: other_col
           relatedModel: @
-          lazyLoad: lazyLoad
+          remoteRefresh: remoteRefresh
+          lazyLoad: options.lazyLoad
           hasMany: opts
           attribute: attr
-      else if _.isFunction(lazyLoad)
-        lazyLoad(opts.subset[@cid].child)
+      else if options.remoteRefresh and options.remoteRefresh != 'first'
+        opts.subset[@cid].remoteRefresh
+          lazyLoad: options.lazyLoad
+      else if _.isFunction(options.lazyLoad)
+        options.lazyLoad(opts.subset[@cid].child)
       return opts.subset[@cid].child
 
     # Check if this is a hasAndBelongsToMany relation
@@ -958,15 +994,23 @@ class Backbone.RailsModel extends Backbone.Model
       opts.subset = {} unless opts.subset
       opts.subset[@cid] = {ids: [], collection: null, mirrors: {}} unless opts.subset[@cid]
       unless opts.subset[@cid].collection
+        if options.remoteRefresh
+          remoteRefresh = true
+        else
+          remoteRefresh = false
         other_col = @_store.getCollectionFromModel(_.result(opts, 'modelType'))
         opts.subset[@cid].collection = new Backbone.RailsManyToManyRelationCollection
           parent: other_col
           relatedModel: @
           hasAndBelongsToMany: opts
-          lazyLoad: lazyLoad
+          remoteRefresh: remoteRefresh
+          lazyLoad: options.lazyLoad
           attribute: attr
-      else if _.isFunction(lazyLoad)
-        lazyLoad(opts.subset[@cid].collection.child)
+      else if options.remoteRefresh and options.remoteRefresh != 'first'
+        opts.subset[@cid].collection.remoteRefresh
+          lazyLoad: options.lazyLoad
+      else if _.isFunction(options.lazyLoad)
+        options.lazyLoad(opts.subset[@cid].collection.child)
       return opts.subset[@cid].collection.child
 
     return null
@@ -1247,33 +1291,37 @@ class Backbone.RailsRelationCollection extends Backbone.CollectionSubset
   constructor: (options) ->
     @_store = Backbone.RailsStore.getInstance()
     @relatedModel = options.relatedModel
+    @doRemoteRefresh = options.remoteRefresh
     @lazyLoad = options.lazyLoad
     @attribute = options.attribute
 
     returnVal = super
 
-    if @lazyLoad
-      # Request relation refresh from server
-      modelType = @_store.getModelType(@relatedModel)
-      fetchOptions =
-        relations: {}
-
-      fetchOptions.relations[modelType] =
-        railsClass: @relatedModel.railsClass
-        railsRelationClass: @relationModelType.prototype.railsClass
-        railsRelationAttribute: @attribute
-        relationType: @_store.getModelType(@relationModelType)
-        ids: [@relatedModel.id]
-
-      refreshDone = =>
-        @_store.off 'refresh:done', refreshDone
-        @lazyLoad(@child)
-
-      @_store.on 'refresh:done', refreshDone
-
-      @_store.refresh(fetchOptions)
+    if @doRemoteRefresh
+      @remoteRefresh
+        lazyLoad: @lazyLoad
 
     return returnVal
+
+  remoteRefresh: (options) ->
+    options = options || {}
+
+    # Request relation refresh from server
+    modelType = @_store.getModelType(@relatedModel)
+    fetchOptions =
+      relations: {}
+
+    fetchOptions.relations[modelType] =
+      railsClass: @relatedModel.railsClass
+      railsRelationClass: @relationModelType.prototype.railsClass
+      railsRelationAttribute: @attribute
+      relationType: @_store.getModelType(@relationModelType)
+      ids: [@relatedModel.id]
+
+    fetchOptions.success = =>
+      options.lazyLoad(@child) if _.isFunction(options.lazyLoad)
+
+    @_store.refresh(fetchOptions)
 
 
 ###
@@ -1307,6 +1355,7 @@ class Backbone.RailsHasManyRelationCollection extends Backbone.RailsRelationColl
       else
         return model.get(attr_id) == @relatedModel.cid
     super
+    @listenTo @child, 'remove', (model) => @_onChildRemove(model)
 
   _onChildAdd: (model, collection, options) ->
     attr = "#{@relation.attribute}_id"
@@ -1314,6 +1363,20 @@ class Backbone.RailsHasManyRelationCollection extends Backbone.RailsRelationColl
       model.set(attr, @relatedModel.id || @relatedModel.cid)
     super
 
+  _onChildRemove: (model) ->
+    sourceType = @_store.getModelType(@relatedModel)
+    targetType = @attribute
+    sourceModelId = @relatedModel.id if @relatedModel.id
+    sourceModelId = @relatedModel.cid unless @relatedModel.cid
+    targetModelId = model.id if model.id
+    targetModelId = model.cid unless model.id
+    removeOptions = {remove: {}}
+    removeOptions.remove[sourceType] = {}
+    removeOptions.remove[sourceType][sourceModelId] = {}
+    removeOptions.remove[sourceType][sourceModelId][targetType] =
+      railsClass: @_store._getModelTypeObj(@relationModelType).prototype.railsClass
+      ids: [targetModelId]
+    @_store.reportManyRelationEvent removeOptions
 
 ###
 * Backbone.RailsManyToManyRelationCollection - INTERNAL USE ONLY!
@@ -1327,9 +1390,6 @@ class Backbone.RailsManyToManyRelationCollection extends Backbone.RailsRelationC
     @_store = Backbone.RailsStore.getInstance()
     @relation = options.hasAndBelongsToMany
     @relationModelType = _.result(@relation, 'modelType')
-    @relatedModel = options.relatedModel
-    @lazyLoad = options.lazyLoad
-    @attribute = options.attribute
     options.filter = (model) =>
       opts = @relation
       return opts.subset[@relatedModel.cid].ids.indexOf(model.cid) != -1
@@ -1361,7 +1421,7 @@ class Backbone.RailsManyToManyRelationCollection extends Backbone.RailsRelationC
       addOptions.add[sourceType][sourceModelId][targetType] =
         railsClass: @_store._getModelTypeObj(@relationModelType).prototype.railsClass
         ids: [targetModelId]
-      @_store.reportManyToManyEvent addOptions
+      @_store.reportManyRelationEvent addOptions
     super
 
   _onChildRemove: (model) ->
@@ -1377,7 +1437,7 @@ class Backbone.RailsManyToManyRelationCollection extends Backbone.RailsRelationC
     removeOptions.remove[sourceType][sourceModelId][targetType] =
       railsClass: @_store._getModelTypeObj(@relationModelType).prototype.railsClass
       ids: [targetModelId]
-    @_store.reportManyToManyEvent removeOptions
+    @_store.reportManyRelationEvent removeOptions
     @relation.subset[@relatedModel.cid].ids = _.without(@relation.subset[@relatedModel.cid].ids, model.cid)
     @relation.subset[@relatedModel.cid].collection.refresh()
 
@@ -1386,6 +1446,9 @@ class Backbone.RailsManyToManyRelationCollection extends Backbone.RailsRelationC
   Backbone.RailsSearchResultCollection - INTERNAL USE ONLY!
 
   CollectionSubset derived from search that handles inclusions correctly
+
+  TODO: Must accept comparator function and perform correct page refresh
+  TODO: Register items available in store to optimize communication
 ###
 class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
   _store: null
@@ -1397,6 +1460,7 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
     @filterData = options.filterData
     @pageData = options.pageData
     @changingPage = false
+    @newModelsCids = []
 
     delete options.cid
     delete options.modelType
@@ -1422,9 +1486,13 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
     @child.firstPage = => @firstPage()
     @child.lastPage = => @lastPage()
     refreshTimeout = null
-    @child.on 'remove', (model) =>
+    @listenTo @child, 'remove', (model) =>
       @filterData = _.without(@filterData, model.cid)
-      @pageData.ids = _.without(@pageData.ids, model.id) if model.id and @pageData.ids
+      if @pageData.ids
+        if model.id
+          @pageData.ids = _.without(@pageData.ids, model.id)
+        else
+          @pageData.ids = _.without(@pageData.ids, model.cid)
       unless refreshTimeout
         refreshTimeout = setTimeout =>
           @_refreshCurrentPage()
@@ -1438,7 +1506,12 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
     return @pageData.ids.length
 
   totalPages: ->
-    return parseInt(@pageData.ids.length / @pageData.pageSize) if @pageData.pageSize > 0
+    if @pageData.pageSize > 0
+      itemsPerPage = @pageData.ids.length / parseFloat(@pageData.pageSize)
+      itemsPerPageInteger = parseInt(itemsPerPage)
+      itemsPerPageDecimal = (itemsPerPageInteger * 10) - itemsPerPageInteger*10
+      return itemsPerPageInteger if itemsPerPageDecimal < 1
+      return itemsPerPageInteger+1
     return 1
 
   actualPage: ->
@@ -1479,6 +1552,7 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
     actualPage = @actualPage()-1
     lastIdx = @maxLength()
     pageSize = @pageData.pageSize
+    pageSize = lastIdx unless pageSize > 0
     beginIdx = actualPage*pageSize
     endIdx = beginIdx+pageSize
     if beginIdx >= lastIdx
@@ -1489,9 +1563,11 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
 
   _refreshPage: (refreshIds, increment) ->
     modelsIds = {}
+    validIds = _.difference(refreshIds, @newModelsCids)
+    pageCids = _.intersection(refreshIds, @newModelsCids)
     modelsIds[@modelType] =
       railsClass: @_store.getModelType(@modelType)
-      ids: refreshIds
+      ids: validIds
     @_store.refresh
       success: =>
         @filterData.length = 0
@@ -1505,7 +1581,11 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
 
   _onChildAdd: (model, collection, options) ->
     @filterData.push(model.cid)
-    @pageData.ids.push(model.id)
+    if model.id
+      @pageData.ids.push(model.id) if model.id
+    else
+      @pageData.ids.push(model.cid)
+      @newModelsCids.push(model.cid)
     @_refreshCurrentPage()
     super
 
