@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.3
+*  Backbone.RailsStore - version 1.0.4
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -331,7 +331,7 @@ class Backbone.RailsStore
                   throw "Didn't find local model with cid! API BUG!"
                 storedModel.set('id', id)
                 @reportSync(storedModel)
-            @_processServerModelsResponse(model)
+            @_processServerModelsResponse(model, {noConflict: true})
             @_processServerRelationsResponse(model)
             @_changedModels = {}
             @_deletedModels.length = 0
@@ -633,11 +633,12 @@ class Backbone.RailsStore
         @_progressCounter = 0
         @_progressElement.hide() if @_progressElement
 
-  _processServerModelsResponse: (model, extra) ->
+  _processServerModelsResponse: (model, options) ->
+    options = options || {}
     _.each model.get('models'), (modelsData, modelType) =>
       _.each modelsData, (model) =>
-        m = @_storeLocally(modelType, model)
-        extra(m) if _.isFunction(extra)
+        m = @_storeLocally(modelType, model, options)
+        options.extra(m) if _.isFunction(options.extra)
     model.unset('models')
 
   _processServerRelationsResponse: (model) ->
@@ -648,7 +649,8 @@ class Backbone.RailsStore
           owner.set(relationData.attribute, relationIds)
     model.unset('relations')
 
-  _storeLocally: (modelType, model) ->
+  _storeLocally: (modelType, model, options) ->
+    options = options || {}
     storedModel = @findById(modelType, model.id)
     unless storedModel
       serverModel = new @_types[modelType]({id: model.id}, {silent:true})
@@ -663,7 +665,7 @@ class Backbone.RailsStore
       syncAttr = storedModel.syncAttributes
       serverChangedAttr = storedModel.syncChangedAttributes(serverData)
       localChangedAttr = storedModel.syncChangedAttributes(storedModel.attributes)
-      if serverChangedAttr and localChangedAttr
+      if serverChangedAttr and localChangedAttr and not options.noConflict
         conflictKeys = _.keys(localChangedAttr)
         conflictChangedAttr = _.pick(serverChangedAttr, conflictKeys)
         noConflictAttr = _.omit(serverChangedAttr, conflictKeys)
@@ -683,7 +685,6 @@ class Backbone.RailsStore
           delete storedModel.conflict
       else if serverChangedAttr
         storedModel.set(serverChangedAttr, {storeSync:true})
-        #storedModel.syncAttributes = _.clone(storedModel.attributes)
       @reportSync(storedModel)
 
       storedModel.trigger('refresh:done', storedModel)
@@ -772,16 +773,27 @@ class Backbone.RailsModel extends Backbone.Model
   ###
   hasAndBelongsToMany: {}
 
+  ###
+    parseType - Defines standard types for automatic attributes convertion
+
+    Available types:
+      'DateTime' - parse information as javascript Date objetc
+      function - parse using provided function
+
+  ###
 
   ###
     constructor - register model in Store and proceed
   ###
   constructor: (attr, options) ->
+    @parseTypes = @parseTypes || {}
+    @parseTypes['created_at'] = 'DateTime'
+    @parseTypes['updated_at'] = 'DateTime'
     @_store = Backbone.RailsStore.getInstance()
     super
-    @_store.registerModel(@,options||{})
     unless @attributes.created_at
       @set({created_at: new Date(),updated_at: new Date()},{silent:true})
+    @_store.registerModel(@,options||{})
     @syncAttributes = _.clone(@attributes)
     unless @attributes.id
       @_store._registerModelChange(@)
@@ -866,10 +878,11 @@ class Backbone.RailsModel extends Backbone.Model
     parse - generate locale strings for created_at and updated_at
   ###
   parse: (attr) ->
-    if attr['created_at'] and not (attr['created_at'] instanceof Date)
-      attr['created_at'] = new Date(attr['created_at'])
-    if attr['updated_at'] and not (attr['updated_at'] instanceof Date)
-      attr['updated_at'] = new Date(attr['updated_at'])
+    _.each attr, (value, key) =>
+      if @parseTypes[key] == 'DateTime'
+        attr[key] = new Date(value)
+      else if _.isFunction(@parseTypes[key])
+        attr[key] = @parseTypes[key](value)
     return attr
 
   ###
@@ -1478,6 +1491,9 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
       return @filterData.indexOf(model.cid)
 
     @child.release = => @release()
+    @child.actualPageFirstItem = => @actualPageFirstItem()
+    @child.actualPageLastItem = => @actualPageLastItem()
+    @child.lastItem = => @lastItem()
     @child.maxLength = => @maxLength()
     @child.totalPages = => @totalPages()
     @child.actualPage = => @actualPage()
@@ -1485,6 +1501,7 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
     @child.previousPage = => @previousPage()
     @child.firstPage = => @firstPage()
     @child.lastPage = => @lastPage()
+    @child.pageSize = => @pageSize()
     refreshTimeout = null
     @listenTo @child, 'remove', (model) =>
       @filterData = _.without(@filterData, model.cid)
@@ -1502,16 +1519,29 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
   release: ->
     @_store.releaseSearchCollection(@)
 
+  actualPageFirstItem: ->
+    return ((@pageData.actualPage-1) * @pageData.pageSize) if @pageData.pageSize
+    return 0
+
+  actualPageLastItem: ->
+    return 0 unless @pageData.pageSize > 0
+    item = ((@pageData.actualPage-1) * @pageData.pageSize) + @pageData.pageSize - 1
+    return @lastItem() if @lastItem() < item
+    return item
+
+  lastItem: ->
+    return @pageData.ids.length-1
+
   maxLength: ->
     return @pageData.ids.length
 
   totalPages: ->
     if @pageData.pageSize > 0
-      itemsPerPage = @pageData.ids.length / parseFloat(@pageData.pageSize)
-      itemsPerPageInteger = parseInt(itemsPerPage)
-      itemsPerPageDecimal = (itemsPerPageInteger * 10) - itemsPerPageInteger*10
-      return itemsPerPageInteger if itemsPerPageDecimal < 1
-      return itemsPerPageInteger+1
+      pages = @pageData.ids.length / parseFloat(@pageData.pageSize)
+      pagesInteger = parseInt(pages)
+      pagesDecimal = (pages * 10) - pagesInteger*10
+      return pagesInteger if pagesDecimal < 1
+      return pagesInteger+1
     return 1
 
   actualPage: ->
@@ -1545,6 +1575,8 @@ class Backbone.RailsSearchResultCollection extends Backbone.CollectionSubset
     refreshIds = @pageData.ids.slice(beginIdx, endIdx)
     @_refreshPage(refreshIds, -1)
 
+  pageSize: ->
+    return @pageData.pageSize
 
   _refreshCurrentPage: ->
     return false if @changingPage

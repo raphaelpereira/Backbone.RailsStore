@@ -1,7 +1,7 @@
 ###
 #  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 #
-#  Backbone.RailsStore - version 1.0.1
+#  Backbone.RailsStore - version 1.0.2
 #
 #  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 #  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -220,16 +220,18 @@ class BackboneRailsStoreController < ApplicationController
               updated = server_model.update_attributes(model)
               raise_error(server_model) if not updated
 
-              model.each do |key, attr|
-                if key.match(/.*_id$/)
+              model.each do |attr_key, attr|
+                if attr_key.match(/.*_id$/)
                   if attr.to_s().match(/c[[:digit:]]*/)
                     set_after_create.push({
                                               :model => server_model,
-                                              :attr  => key,
+                                              :railsClass => klass,
+                                              :key => key,
+                                              :attr  => attr_key,
                                               :temp_id => attr
                                           })
                   else
-                    server_model[key] = attr
+                    server_model[attr_key] = attr
                     saved = server_model.save
                     raise_error(server_model) if not saved
                   end
@@ -241,7 +243,12 @@ class BackboneRailsStoreController < ApplicationController
           set_after_create.each do |info|
             info[:model][info[:attr]] = new_models[info[:temp_id]].id
             saved = info[:model].save
-            raise_error(info[:model]) if not saved
+            params[:refreshModels][info[:key]] = {
+                :railsClass => info[:railsClass],
+                :ids => []
+            } if not params[:refreshModels][info[:key]]
+            params[:refreshModels][info[:key]][:ids].push(info[:model].id)
+            raise_error(info[:model]) unless saved
           end
         end
 
