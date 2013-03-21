@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.4
+*  Backbone.RailsStore - version 1.0.5
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -278,12 +278,17 @@ class Backbone.RailsStore
 
     Persists all changes to server and performs a sync after that
 
-    Events:
+    Parameters:
+      success - Called upon success
+      error - Called upon error
+
+    Triggers:
       commit:start - just after starting server request
       commit:done - after successful server request response
       commit:failed - if something wrong happened
   ###
-  commit: ->
+  commit: (options) ->
+    options = options || {}
     commitData = {}
     _.each @_changedModels, (models, modelType) =>
       _.each models, (model) =>
@@ -347,8 +352,10 @@ class Backbone.RailsStore
           @_storeServer.unset('errors')
           _.each triggerModels, (changedModel) =>
             changedModel.trigger 'commit:done', changedModel
-          @trigger('commit:done', @) if not errors
+          @trigger('commit:done', @) unless errors
           @trigger('commit:failed', {model: model, errors: errors}) if errors
+          options.success() unless errors
+          options.error() if errors
           # TODO: handle rollback
         catch e
           console.log(e)
@@ -654,8 +661,8 @@ class Backbone.RailsStore
     storedModel = @findById(modelType, model.id)
     unless storedModel
       serverModel = new @_types[modelType]({id: model.id}, {silent:true})
-      serverModel.set(model, {parse:true, storeSync:true})
-      #serverModel.syncAttributes = _.clone(serverModel.attributes)
+      serverModel.set(model, {parse:true, storeSync:true, silent:true})
+      serverModel.trigger('change', serverModel)
       @reportSync(serverModel)
       serverModel.trigger('refresh:done', serverModel)
       return serverModel
@@ -675,7 +682,8 @@ class Backbone.RailsStore
           hasConflict = true
           storedModel.trigger("refresh:conflict:#{key}", storedModel)
         )
-        storedModel.set(noConflictAttr,{storeSync:true})
+        storedModel.set(noConflictAttr,{storeSync:true, silent:true})
+        storedModel.trigger('change', storedModel)
         @reportSync(storedModel)
         storedModel.syncAttributes = _.extend(syncAttr, noConflictAttr)
         if hasConflict
@@ -684,7 +692,8 @@ class Backbone.RailsStore
         else
           delete storedModel.conflict
       else if serverChangedAttr
-        storedModel.set(serverChangedAttr, {storeSync:true})
+        storedModel.set(serverChangedAttr, {storeSync:true, silent:true})
+        storedModel.trigger('change', storedModel)
       @reportSync(storedModel)
 
       storedModel.trigger('refresh:done', storedModel)
@@ -1172,8 +1181,8 @@ class Backbone.RailsModel extends Backbone.Model
   ###
   backboneSave: @prototype.save
 
-  save: ->
-    @_store.commit()
+  save: (options) ->
+    @_store.commit(options)
 
   ###
     destroy - removes from server
