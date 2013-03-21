@@ -1,0 +1,2 @@
+module BackboneRailsStore
+end
