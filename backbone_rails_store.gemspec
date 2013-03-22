@@ -7,16 +7,20 @@ require "backbone_rails_store/version"
 Gem::Specification.new do |s|
   s.name        = "backbone_rails_store"
   s.version     = BackboneRailsStore::VERSION
-  s.authors     = ["TODO: Your name"]
-  s.email       = ["TODO: Your email"]
-  s.homepage    = "TODO"
-  s.summary     = "TODO: Summary of BackboneRailsStore."
-  s.description = "TODO: Description of BackboneRailsStore."
+  s.authors     = ["Raphael Derosso Pereira"]
+  s.email       = ["raphael@rmi.inf.br"]
+  s.homepage    = "http://github.com/raphaelpereira/Backbone.RailsStore"
+  s.summary     = "Rails models to Backbone.js"
+  s.description = "Easy Rails model operations in javascript, persistence layer, rails model relationships to Backbone.js models."
 
-  s.files = Dir["{app,config,db,lib}/**/*"] + ["MIT-LICENSE", "Rakefile", "README.rdoc"]
+  s.files = Dir["app/**/*"] + Dir["vendor/**/*"] + Dir["lib/**/*"] + ["MIT-LICENSE", "Rakefile", "README.rdoc"]
   s.test_files = Dir["test/**/*"]
 
-  s.add_dependency "rails", "~> 3.2.10"
+  s.add_dependency "rails", "~> 3.1.0"
+  s.add_dependency('railties', '>= 3.1.0')
+  s.add_dependency('coffee-script', '~> 2.2.0')
+  s.add_dependency('jquery-rails', '~> 2.1.3')
+  s.add_dependency('ejs', '~> 1.1.1')
 
-  s.add_development_dependency "sqlite3"
+  #s.add_development_dependency "sqlite3"
 end
