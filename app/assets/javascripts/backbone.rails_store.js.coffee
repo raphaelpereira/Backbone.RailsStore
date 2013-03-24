@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.5
+*  Backbone.RailsStore - version 1.0.6
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -11,6 +11,11 @@
 *
 ###
 
+unless Backbone.CollectionSubset
+  throw 'Backbone.RailsStore depends upon Backbone.CollectionSubset!'
+
+unless Date.CultureInfo
+  throw 'Backbone.RailsStore depends upon Datejs. Please load any Cultural version!'
 
 ###
 * Backbone.RailsStore - Singleton Pattern Local Object/Collection Repository
@@ -22,6 +27,9 @@
 * least guarantee consistency for some time.
 ###
 class Backbone.RailsStore
+  _defaultFormats:
+    DateTime: 'd/MM/yyyy HH:mm:ss'
+    Date: 'd/MM/yyyy'
   _types: {}
   _collections: {}
   _collectionsByModel: {}
@@ -54,6 +62,7 @@ class Backbone.RailsStore
   constructor: ->
     _.extend(@, Backbone.Events)
     @_storeServer = new Backbone.RailsStoreServer()
+    @setBuiltinModifiersFormat(@_defaultFormats)
 
   ###
     setupProgressElement - Sets up a progress to be shown and hidden on communication
@@ -61,6 +70,18 @@ class Backbone.RailsStore
   setupProgressElement: (el) ->
     @_progressElement = el
     el.hide()
+
+  ###
+    setBuiltinModifiersFormat - Sets the default formats for builtin attributeModifiers
+  ###
+  setBuiltinModifiersFormat: (format) ->
+    @_defaultFormats = format
+
+  ###
+    getBuiltinModifierFormat - returns the actual default format
+  ###
+  getBuiltinModifierFormat: (modifier) ->
+    return @_defaultFormats[modifier]
 
   ###
     findById - Returns internal reference to object by its ID or CID
@@ -354,8 +375,8 @@ class Backbone.RailsStore
             changedModel.trigger 'commit:done', changedModel
           @trigger('commit:done', @) unless errors
           @trigger('commit:failed', {model: model, errors: errors}) if errors
-          options.success() unless errors
-          options.error() if errors
+          options.success() if options.success and not errors
+          options.error() if options.error and errors
           # TODO: handle rollback
         catch e
           console.log(e)
@@ -529,7 +550,7 @@ class Backbone.RailsStore
     col_idx = @getModelType(model)
     col = @_collectionsByModel[col_idx]
     if not col?
-      throw "Não há Collections para o tipo #{col_idx}"
+      throw "No Collections for type #{col_idx}"
     col.add(model,options)
     model.on('change', @_registerModelChange, @)
 
@@ -623,7 +644,7 @@ class Backbone.RailsStore
   ###
   releaseSearchCollection: (collection) ->
     if not collection instanceof Backbone.RailsSearchResultCollection
-      throw "Cannot realease colllection! API BUG!"
+      throw "Cannot release colllection! API BUG!"
 
     modelType = @getModelType(collection.modelType)
     delete @_searchedModels[modelType][collection.cid] if @_searchedModels[modelType]
@@ -725,8 +746,6 @@ class Backbone.RailsStore
 *
 ###
 class Backbone.RailsModel extends Backbone.Model
-  @version: '0.1.0'
-
   _toJSONLock: false
   _persistent: false
   _readOnly: false
@@ -783,21 +802,40 @@ class Backbone.RailsModel extends Backbone.Model
   hasAndBelongsToMany: {}
 
   ###
-    parseType - Defines standard types for automatic attributes convertion
+    attributeModifiers - Defines standard modifiers for attributes
 
-    Available types:
-      'DateTime' - parse information as javascript Date objetc
-      function - parse using provided function
+    Usage:
+      attributeModifiers is a Hash object on which each key stands for an
+    attribute name associated with another hash with the following:
+
+      getConverter - function to be called upon a get
+      setConverter - function to be called upon a set
+      converter    - function to be called upon set or get
+      options      - options to be passed to converter
+
+      Any converter (get, set or general) can be set to a builtin converter. Available builtins are:
+
+      DateTime
+      Date
+
+      Builtin converters accepts a format option
 
   ###
+  attributeModifiers:
+    created_at:
+      converter: 'DateTime'
+    updated_at:
+      converter: 'DateTime'
 
   ###
     constructor - register model in Store and proceed
   ###
   constructor: (attr, options) ->
-    @parseTypes = @parseTypes || {}
-    @parseTypes['created_at'] = 'DateTime'
-    @parseTypes['updated_at'] = 'DateTime'
+    _.each @attributeModifiers, (modifierData, type) =>
+      if modifierData.converter
+        @attributeModifiers[type].getConverter = modifierData.converter
+        @attributeModifiers[type].setConverter = modifierData.converter
+
     @_store = Backbone.RailsStore.getInstance()
     super
     unless @attributes.created_at
@@ -887,12 +925,7 @@ class Backbone.RailsModel extends Backbone.Model
     parse - generate locale strings for created_at and updated_at
   ###
   parse: (attr) ->
-    _.each attr, (value, key) =>
-      if @parseTypes[key] == 'DateTime'
-        attr[key] = new Date(value)
-      else if _.isFunction(@parseTypes[key])
-        attr[key] = @parseTypes[key](value)
-    return attr
+    return @_parseAttributeModifiers(attr)
 
   ###
     get - checks if request is a relation and generate apropriate return model
@@ -933,10 +966,18 @@ class Backbone.RailsModel extends Backbone.Model
 
       return result
 
-    # Return Locale String for Date objects
-    if @attributes[attr] instanceof Date
-      # TODO: OH MY GOD THIS IS UGLY! Should get a second parameter with locale info
-      return @attributes[attr].toLocaleString('pt-BR')
+    # Process attributeModifiers
+    if @attributes[attr] and @attributeModifiers[attr] and @attributeModifiers[attr].getConverter
+      if @attributeModifiers[attr].getConverter == 'DateTime'
+        if @attributeModifiers[attr].options and @attributeModifiers[attr].options.format
+          return @attributes[attr].toString(@attributeModifiers[attr].options.format)
+        else
+          return @attributes[attr].toString(@_store.getBuiltinModifierFormat('DateTime'))
+      if @attributeModifiers[attr].getConverter == 'Date'
+        if @attributeModifiers[attr].options and @attributeModifiers[attr].options.format
+          return @attributes[attr].toString(@attributeModifiers[attr].options.format)
+        else
+          return @attributes[attr].toString(@_store.getBuiltinModifierFormat('Date'))
 
     # If we have, deliver
     val = super
@@ -1059,7 +1100,11 @@ class Backbone.RailsModel extends Backbone.Model
     belongsToIdsCounter = 0;
 
     modelAttributes = @_cleanUpRelations(attributes)
-    modelAttributes = @parse(modelAttributes) if (options.parse)
+    if options.parse
+      modelAttributes = @parse(modelAttributes)
+    else
+      modelAttributes = @_parseAttributeModifiers(modelAttributes)
+
     ret = super(modelAttributes,options)
 
     # Verify relations updating
@@ -1218,7 +1263,16 @@ class Backbone.RailsModel extends Backbone.Model
     )
     return attributes
 
-
+  _parseAttributeModifiers: (attr) ->
+    _.each attr, (value, key) =>
+      if @attributeModifiers[key]
+        if @attributeModifiers[key].getConverter == 'DateTime'
+          attr[key] = Date.parse(value) if value
+        else if @attributeModifiers[key].getConverter == 'Date'
+          attr[key] = Date.parse(value) if value
+        else if _.isFunction(@attributeModifiers[key].getConverter)
+          attr[key] = @attributeModifiers[key].getConverter(value)
+    return attr
 
 ###
 * Backbone.RailsCollection - Singleton Pattern Collection

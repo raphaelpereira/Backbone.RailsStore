@@ -16,11 +16,9 @@ Gem::Specification.new do |s|
   s.files = Dir["app/**/*"] + Dir["vendor/**/*"] + Dir["lib/**/*"] + ["MIT-LICENSE", "Rakefile", "README.rdoc"]
   s.test_files = Dir["test/**/*"]
 
-  s.add_dependency "rails", "~> 3.1.0"
+  s.add_dependency "rails", ">= 3.1.0"
   s.add_dependency('railties', '>= 3.1.0')
   s.add_dependency('coffee-script', '~> 2.2.0')
-  s.add_dependency('jquery-rails', '~> 2.1.3')
+  s.add_dependency('jquery-rails', '~> 2.2')
   s.add_dependency('ejs', '~> 1.1.1')
-
-  #s.add_development_dependency "sqlite3"
 end
