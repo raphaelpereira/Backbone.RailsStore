@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.8
+*  Backbone.RailsStore - version 1.0.9
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -929,12 +929,6 @@ class Backbone.RailsModel extends Backbone.Model
     return changed
 
   ###
-    parse - generate locale strings for created_at and updated_at
-  ###
-  parse: (attr) ->
-    return @_parseAttributeModifiers(attr)
-
-  ###
     get - checks if request is a relation and generate apropriate return model
 
     This method supports deep model requests, like 'user.name' and even
@@ -1107,10 +1101,8 @@ class Backbone.RailsModel extends Backbone.Model
     belongsToIdsCounter = 0;
 
     modelAttributes = @_cleanUpRelations(attributes)
-    if options.parse
-      modelAttributes = @parse(modelAttributes)
-    else
-      modelAttributes = @_parseAttributeModifiers(modelAttributes)
+    modelAttributes = @parse(modelAttributes) if options.parse
+    modelAttributes = @_parseAttributeModifiers(modelAttributes)
 
     ret = super(modelAttributes,options)
 
