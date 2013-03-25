@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.6
+*  Backbone.RailsStore - version 1.0.7
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -182,6 +182,7 @@ class Backbone.RailsStore
           options.success(authModel) if options.success
         catch e
           console.log(e)
+          @trigger('comm:fatal', e)
           options.error() if options.error
           @trigger('authenticate:failed')
       error: =>
@@ -282,6 +283,7 @@ class Backbone.RailsStore
           @trigger('find:done', @)
         catch e
           console.log(e)
+          @trigger('comm:fatal', e)
           if options.error
             options.error.apply(@,arguments)
           @trigger('find:failed', @)
@@ -376,14 +378,17 @@ class Backbone.RailsStore
           @trigger('commit:done', @) unless errors
           @trigger('commit:failed', {model: model, errors: errors}) if errors
           options.success() if options.success and not errors
-          options.error() if options.error and errors
+          options.error(errors) if options.error and errors
           # TODO: handle rollback
         catch e
           console.log(e)
+          @trigger('comm:fatal', e)
           @trigger('commit:failed', {errors: "Communication error!"})
       error: =>
         # TODO: i18n
-        @trigger('commit:failed', {errors: "Communication error!"})
+        errors = {errors: "Communication error!"}
+        options.error(errors) if options.error
+        @trigger('commit:failed', errors)
 
     @trigger('commit:start')
     @_doProgress(xhr)
@@ -476,6 +481,7 @@ class Backbone.RailsStore
           success() if success
         catch e
           console.log(e)
+          @trigger('comm:fatal', e)
           @trigger('refresh:failed')
       error: ->
         @trigger('refresh:failed')
@@ -522,6 +528,7 @@ class Backbone.RailsStore
           @trigger('service:done', @)
         catch e
           console.log(e)
+          @trigger('comm:fatal', e)
           @trigger('service:failed', resp)
       error: (resp) =>
         @trigger('service:failed', resp)
@@ -1376,6 +1383,8 @@ class Backbone.RailsRelationCollection extends Backbone.CollectionSubset
     if @doRemoteRefresh
       @remoteRefresh
         lazyLoad: @lazyLoad
+    else if @lazyLoad
+      @lazyLoad(@child)
 
     return returnVal
 
