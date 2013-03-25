@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.7
+*  Backbone.RailsStore - version 1.0.8
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -28,8 +28,8 @@ unless Date.CultureInfo
 ###
 class Backbone.RailsStore
   _defaultFormats:
-    DateTime: 'd/MM/yyyy HH:mm:ss'
-    Date: 'd/MM/yyyy'
+    DateTime: 'dd/MM/yyyy HH:mm:ss'
+    Date: 'dd/MM/yyyy'
   _types: {}
   _collections: {}
   _collectionsByModel: {}
@@ -1276,7 +1276,7 @@ class Backbone.RailsModel extends Backbone.Model
         if @attributeModifiers[key].getConverter == 'DateTime'
           attr[key] = Date.parse(value) if value
         else if @attributeModifiers[key].getConverter == 'Date'
-          attr[key] = Date.parse(value) if value
+          attr[key] = Date.parseExact(value, ['yyyy-MM-dd',@_store.getBuiltinModifierFormat('Date')]) if value
         else if _.isFunction(@attributeModifiers[key].getConverter)
           attr[key] = @attributeModifiers[key].getConverter(value)
     return attr
