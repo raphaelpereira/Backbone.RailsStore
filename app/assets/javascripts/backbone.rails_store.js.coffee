@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.9
+*  Backbone.RailsStore - version 1.0.10
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -1268,7 +1268,10 @@ class Backbone.RailsModel extends Backbone.Model
         if @attributeModifiers[key].getConverter == 'DateTime'
           attr[key] = Date.parse(value) if value
         else if @attributeModifiers[key].getConverter == 'Date'
-          attr[key] = Date.parseExact(value, ['yyyy-MM-dd',@_store.getBuiltinModifierFormat('Date')]) if value
+          if value instanceof Date
+            attr[key] = value
+          else if value
+            attr[key] = Date.parseExact(value, ['yyyy-MM-dd',@_store.getBuiltinModifierFormat('Date')])
         else if _.isFunction(@attributeModifiers[key].getConverter)
           attr[key] = @attributeModifiers[key].getConverter(value)
     return attr
