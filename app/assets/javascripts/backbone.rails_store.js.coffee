@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.10
+*  Backbone.RailsStore - version 1.0.11
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -828,16 +828,17 @@ class Backbone.RailsModel extends Backbone.Model
       Builtin converters accepts a format option
 
   ###
-  attributeModifiers:
-    created_at:
-      converter: 'DateTime'
-    updated_at:
-      converter: 'DateTime'
+  attributeModifiers: {}
 
   ###
     constructor - register model in Store and proceed
   ###
   constructor: (attr, options) ->
+    _.extend @attributeModifiers,
+      created_at:
+        converter: 'DateTime'
+      updated_at:
+        converter: 'DateTime'
     _.each @attributeModifiers, (modifierData, type) =>
       if modifierData.converter
         @attributeModifiers[type].getConverter = modifierData.converter
