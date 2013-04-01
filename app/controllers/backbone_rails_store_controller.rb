@@ -1,7 +1,7 @@
 ###
 #  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 #
-#  Backbone.RailsStore - version 1.0.2
+#  Backbone.RailsStore - version 1.0.3
 #
 #  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 #  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -290,6 +290,8 @@ class BackboneRailsStoreController < ApplicationController
             klass = data[:railsClass]
             data[:models].each do |id, data|
               data.each do |relation, data|
+                next if data.nil?
+                data[:ids] = [] if data[:ids].nil? or not data[:ids].is_a(Array)
                 relation_array = klass.constantize.find(id).send("#{relation}")
                 result_relations = relation_array.reject do |relation_model|
                   data[:ids].include?(relation_model.id)

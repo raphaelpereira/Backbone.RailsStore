@@ -559,9 +559,10 @@ class Backbone.RailsStore
     if not col?
       throw "No Collections for type #{col_idx}"
     col.add(model,options)
-    model.on('change', @_registerModelChange, @)
+    @listenTo model, 'change', (model) => @_registerModelChange(model)
 
   registerDestroyRequest: (model) ->
+    @stopListening model
     if model.id
       @_deletedModels.push(model)
     modelType = @getModelType(model)
@@ -638,10 +639,14 @@ class Backbone.RailsStore
           _.each relations, (ids, relationType) =>
             sourceRailsClass = @_getModelTypeObj(sourceType).prototype.railsClass
             @_manyToManyDestroy[sourceType] = {railsClass: sourceRailsClass, models: {}} unless @_manyToManyDestroy[sourceType]
-            @_manyToManyDestroy[sourceType].models[sourceId] = {} unless @_manyToManyDestroy[sourceType].models[sourceId]
-            obj = @_manyToManyDestroy[sourceType].models[sourceId][relationType] = {railsClass: ids.railsClass, ids: []} unless @_manyToManyDestroy[sourceType].models[sourceId][relationType]
-            obj = @_manyToManyDestroy[sourceType].models[sourceId][relationType]
-            obj.ids = _.uniq(obj.ids.concat(ids.ids))
+            unless _.isFunction(sourceId.indexOf) and sourceId.indexOf('c') != -1
+              @_manyToManyDestroy[sourceType].models[sourceId] = {} unless @_manyToManyDestroy[sourceType].models[sourceId]
+              obj = @_manyToManyDestroy[sourceType].models[sourceId][relationType] = {railsClass: ids.railsClass, ids: []} unless @_manyToManyDestroy[sourceType].models[sourceId][relationType]
+              obj = @_manyToManyDestroy[sourceType].models[sourceId][relationType]
+              removeFromServer = []
+              _.each ids.ids, (id) =>
+                removeFromServer.push(id) unless _.isFunction(id.indexOf) and id.indexOf('c') != -1
+              obj.ids = _.uniq(obj.ids.concat(removeFromServer))
             if @_manyToManyCreate[sourceType] and @_manyToManyCreate[sourceType].models[sourceId] and @_manyToManyCreate[sourceType].models[sourceId][relationType]
               @_manyToManyCreate[sourceType].models[sourceId][relationType].ids = _.difference(@_manyToManyCreate[sourceType].models[sourceId][relationType].ids, ids.ids)
 
@@ -735,9 +740,10 @@ class Backbone.RailsStore
     unless model.railsClass
       return false
     modelType = @getModelType(model)
-    @_changedModels[modelType] = [] unless @_changedModels[modelType]
-    @_changedModels[modelType].push(model)
-    @_changedModels[modelType] = _.uniq(@_changedModels[modelType])
+    unless _.isEqual model.syncAttributes, model.attributes
+      @_changedModels[modelType] = [] unless @_changedModels[modelType]
+      @_changedModels[modelType].push(model)
+      @_changedModels[modelType] = _.uniq(@_changedModels[modelType])
     return model
 
 
@@ -1448,7 +1454,7 @@ class Backbone.RailsHasManyRelationCollection extends Backbone.RailsRelationColl
     sourceType = @_store.getModelType(@relatedModel)
     targetType = @attribute
     sourceModelId = @relatedModel.id if @relatedModel.id
-    sourceModelId = @relatedModel.cid unless @relatedModel.cid
+    sourceModelId = @relatedModel.cid unless @relatedModel.id
     targetModelId = model.id if model.id
     targetModelId = model.cid unless model.id
     removeOptions = {remove: {}}
@@ -1509,7 +1515,7 @@ class Backbone.RailsManyToManyRelationCollection extends Backbone.RailsRelationC
     sourceType = @_store.getModelType(@relatedModel)
     targetType = @attribute
     sourceModelId = @relatedModel.id if @relatedModel.id
-    sourceModelId = @relatedModel.cid unless @relatedModel.cid
+    sourceModelId = @relatedModel.cid unless @relatedModel.id
     targetModelId = model.id if model.id
     targetModelId = model.cid unless model.id
     removeOptions = {remove: {}}
