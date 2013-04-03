@@ -1,7 +1,7 @@
 ###
 *  Copyright (C) 2013 - Raphael Derosso Pereira <raphaelpereira@gmail.com>
 *
-*  Backbone.RailsStore - version 1.0.11
+*  Backbone.RailsStore - version 1.0.12
 *
 *  Backbone extensions to provide complete Rails interaction on CoffeeScript/Javascript,
 *  keeping single reference models in memory, reporting refresh conflicts and consistently
@@ -855,9 +855,10 @@ class Backbone.RailsModel extends Backbone.Model
     unless @attributes.created_at
       @set({created_at: new Date(),updated_at: new Date()},{silent:true})
     @_store.registerModel(@,options||{})
-    @syncAttributes = _.clone(@attributes)
+    @syncAttributes = {}
     unless @attributes.id
       @_store._registerModelChange(@)
+    @syncAttributes = _.clone(@attributes)
 
 
   ###
@@ -876,11 +877,10 @@ class Backbone.RailsModel extends Backbone.Model
   changedAttributes: (attr) ->
     changedAttr = super
     if attr? and changedAttr
-      _.each(changedAttr, (value, key) =>
+      _.each changedAttr, (value, key) =>
         # TODO: Should iterate over hasMany to check if it has changed
-        if @belongsTo[key] or @hasMany[key]
+        if @belongsTo[key] or @hasOne[key] or @hasMany[key] or @hasAndBelongsToMany[key]
           delete changedAttr[key]
-      )
       changedAttr = false if _.isEmpty(changedAttr)
     return changedAttr
 
