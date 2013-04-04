@@ -291,7 +291,7 @@ class BackboneRailsStoreController < ApplicationController
             data[:models].each do |id, data|
               data.each do |relation, data|
                 next if data.nil?
-                data[:ids] = [] if data[:ids].nil? or not data[:ids].is_a(Array)
+                data[:ids] = [] if data[:ids].nil? or not data[:ids].is_a?(Array)
                 relation_array = klass.constantize.find(id).send("#{relation}")
                 result_relations = relation_array.reject do |relation_model|
                   data[:ids].include?(relation_model.id)
