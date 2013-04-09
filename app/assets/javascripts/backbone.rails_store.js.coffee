@@ -497,6 +497,7 @@ class Backbone.RailsStore
       models - Model to send to controller
       params - Other parameters to send to controller
       type - Type of call. Defaults to 'POST'
+      success - method to be executed upon sucess
 
     Response - This method accepts responses with the following data:
       models - Models to be stored locally
@@ -522,14 +523,21 @@ class Backbone.RailsStore
       silent: true
       success: (model) =>
         try
-          @_processServerModelsResponse(model)
+          models = {}
+          @_processServerModelsResponse model,
+            extra: (m) =>
+              modelType = @getModelType(m)
+              unless models[modelType]
+                models[modelType] = []
+              models[modelType].push(m)
           @_processServerRelationsResponse(model)
           @reportSyncChanges()
-          @trigger('service:done', @)
+          @trigger('service:done', models)
+          params.success(models) if _.isFunction(params.success)
         catch e
           console.log(e)
           @trigger('comm:fatal', e)
-          @trigger('service:failed', resp)
+          @trigger('service:failed', e)
       error: (resp) =>
         @trigger('service:failed', resp)
     @trigger('service:start', @)
