@@ -52,7 +52,7 @@ class Backbone.RailsStore
     Singleton Pattern
   ###
   @getInstance: ->
-    if not @_instance
+    unless @_instance
       @_instance = new Backbone.RailsStore()
     return @_instance
 
@@ -119,7 +119,7 @@ class Backbone.RailsStore
       hasElements = false
       _.each @_collections, (collection) =>
         collection.each (model) =>
-          if not model.isPersistent()
+          unless model.isPersistent()
             hasElements = true
             @release(model, {silent:true})
 
@@ -146,9 +146,9 @@ class Backbone.RailsStore
       authenticate:failed - upon failure
   ###
   authenticate: (options) ->
-    if not options.modelType
+    unless options.modelType
       throw('Must define a modelType upon authentication!')
-    if not options.model
+    unless options.model
       throw('Must define a model upon authentication')
     options.modelType = @getModelType(options.modelType)
     token = (new Date()).toString()
@@ -223,11 +223,11 @@ class Backbone.RailsStore
       lastPage() - request last page models from server
   ###
   findRemote: (options) ->
-    if not options.modelType
+    unless options.modelType
       throw('Must define a modelType upon search!')
     options.modelType = @getModelType(options.modelType)
     col_cid = @_searchedModels._cid++
-    @_searchedModels[options.modelType] = {} if not @_searchedModels[options.modelType]
+    @_searchedModels[options.modelType] = {} unless @_searchedModels[options.modelType]
     @_searchedModels[options.modelType][col_cid] =
       subset: null
       ids: []
@@ -279,7 +279,7 @@ class Backbone.RailsStore
           if options.success and searchTarget
             options.success(searchTarget.subset.child)
           @trigger('find:exists', @) if reportExists
-          @trigger('find:empty',@) if not reportExists
+          @trigger('find:empty',@) unless reportExists
           @trigger('find:done', @)
         catch e
           console.log(e)
@@ -315,13 +315,13 @@ class Backbone.RailsStore
     commitData = {}
     _.each @_changedModels, (models, modelType) =>
       _.each models, (model) =>
-        commitData[modelType] = {railsClass: model.railsClass, data: []} if not commitData[modelType]
+        commitData[modelType] = {railsClass: model.railsClass, data: []} unless commitData[modelType]
         commitData[modelType].data.push(model.toJSON())
 
     destroyData = {}
     _.each @_deletedModels, (model) =>
       modelType = @getModelType(model)
-      destroyData[modelType] = [] if not destroyData[modelType]
+      destroyData[modelType] = [] unless destroyData[modelType]
       destroyData[modelType].push(model.toJSON())
 
     createRelationData = @_manyToManyCreate
@@ -342,7 +342,7 @@ class Backbone.RailsStore
           if errors
             modelType = @getModelType(errors.railsClass)
             model = @_storeLocally(modelType, errors.model)
-            model.dirty = true if not model.id
+            model.dirty = true unless model.id
             errors = errors.errors
             model.trigger 'commit:failed',
               model: model,
@@ -355,7 +355,7 @@ class Backbone.RailsStore
             _.each model.get('modelsIds'), (idsData, modelType) =>
               _.each idsData, (id, cid) =>
                 storedModel = @findById(modelType, cid)
-                if not storedModel
+                unless storedModel
                   throw "Didn't find local model with cid! API BUG!"
                 storedModel.set('id', id)
                 @reportSync(storedModel)
@@ -555,7 +555,7 @@ class Backbone.RailsStore
 
   registerCollection: (col) ->
     col_idx = @getModelType(col)
-    if not @_collections[col_idx]
+    unless @_collections[col_idx]
       new_col = new col()
       @_collections[col_idx] = new_col
       modelType = @getModelType(new_col)
@@ -564,7 +564,7 @@ class Backbone.RailsStore
   registerModel: (model,options) ->
     col_idx = @getModelType(model)
     col = @_collectionsByModel[col_idx]
-    if not col?
+    unless col?
       throw "No Collections for type #{col_idx}"
     col.add(model,options)
     @listenTo model, 'change', (model) => @_registerModelChange(model)
@@ -590,7 +590,7 @@ class Backbone.RailsStore
 
   getModelType: (model) ->
     if _.isString(model)
-      if not @_types[model]
+      unless @_types[model]
         throw "Invalid model #{model}"
       return model
     else if model instanceof Backbone.RailsModel
@@ -598,7 +598,7 @@ class Backbone.RailsStore
     else if model instanceof Backbone.RailsCollection
       return model.model.prototype.railsClass
     else
-      if not model.prototype.railsClass
+      unless model.prototype.railsClass
         if model.prototype.model or not model.prototype.model.prototype.railsClass
           return  model.prototype.model.prototype.railsClass
         throw "Invalid model #{model}"
@@ -663,7 +663,7 @@ class Backbone.RailsStore
     releaseSearchCollection - remove search collection from memory
   ###
   releaseSearchCollection: (collection) ->
-    if not collection instanceof Backbone.RailsSearchResultCollection
+    unless collection instanceof Backbone.RailsSearchResultCollection
       throw "Cannot release colllection! API BUG!"
 
     modelType = @getModelType(collection.modelType)
@@ -1021,7 +1021,7 @@ class Backbone.RailsModel extends Backbone.Model
     if @hasOne[attr]
       @_hasOneCache = {} unless @_hasOneCache
       @_hasOneCache[@cid] = {col: null, ids: []} unless @_hasOneCache[@cid]
-      if not @_hasOneCache[@cid].col
+      unless @_hasOneCache[@cid].col
         if options.remoteRefresh
           remoteRefresh = true
         else
@@ -1047,7 +1047,7 @@ class Backbone.RailsModel extends Backbone.Model
     if @hasMany[attr]
       opts = @hasMany[attr]
       opts.subset = {} unless opts.subset
-      if not opts.subset[@cid]
+      unless opts.subset[@cid]
         if options.remoteRefresh
           remoteRefresh = true
         else
