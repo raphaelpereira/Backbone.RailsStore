@@ -232,11 +232,11 @@ class BackboneRailsStoreController < ApplicationController
                                           })
                   else
                     server_model[attr_key] = attr
-                    saved = server_model.save
-                    raise_error(server_model) if not saved
                   end
                 end
               end
+              saved = server_model.save
+              raise_error(server_model) if not saved
             end
           end
 

@@ -30,6 +30,13 @@ class Backbone.RailsStore
   _defaultFormats:
     DateTime: 'dd/MM/yyyy HH:mm:ss'
     Date: 'dd/MM/yyyy'
+  _dateFormats: [
+    'yyyy-MM-dd',
+    'd/M/yyyy','dd/M/yyyy','d/MM/yyyy','dd/MM/yyyy',
+    'd-M-yyyy','dd-M-yyyy','d-MM-yyyy','dd-MM-yyyy',
+    'd/M/yy','dd/M/yy','d/MM/yy', 'dd/MM/yy',
+    'd-M-yy','dd-M-yy','d-MM-yy', 'dd-MM-yy'
+  ]
   _types: {}
   _collections: {}
   _collectionsByModel: {}
@@ -82,6 +89,18 @@ class Backbone.RailsStore
   ###
   getBuiltinModifierFormat: (modifier) ->
     return @_defaultFormats[modifier]
+
+  ###
+    getDateFormats - returns formats to parse string to dates
+  ###
+  getDateFormats: ->
+    return @_dateFormats
+
+  ###
+    setDateFormats - sets the accepted date formats to parse from strings
+  ###
+  setDateFormats: (formats) ->
+    @_dateFormats = formats
 
   ###
     findById - Returns internal reference to object by its ID or CID
@@ -1286,7 +1305,7 @@ class Backbone.RailsModel extends Backbone.Model
           if value instanceof Date
             attr[key] = value
           else if value
-            attr[key] = Date.parseExact(value, ['yyyy-MM-dd',@_store.getBuiltinModifierFormat('Date')])
+            attr[key] = Date.parseExact(value, @_store.getDateFormats())
         else if _.isFunction(@attributeModifiers[key].getConverter)
           attr[key] = @attributeModifiers[key].getConverter(value)
     return attr
