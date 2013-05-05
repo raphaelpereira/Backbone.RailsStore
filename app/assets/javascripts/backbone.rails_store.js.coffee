@@ -1172,7 +1172,7 @@ class Backbone.RailsModel extends Backbone.Model
           # Eager data being fed from server
           _.each value, (modelAttr) =>
             if _.isObject(modelAttr)
-              id = modelAttr.id
+              id = modelAttr.cid
             else
               id = modelAttr
 
@@ -1180,7 +1180,7 @@ class Backbone.RailsModel extends Backbone.Model
             model = @_store.findById(klass, id)
             if _.isObject(modelAttr)
               if model
-                model.set(modelAttr,_.extend(options,{parse: true}))
+                model.set(opts.attribute, @,_.extend(options,{parse: true}))
               else
                 model = new klass({id: modelAttr.id},{silent:true})
                 model.set(modelAttr,_.extend(options,{parse: true}))
