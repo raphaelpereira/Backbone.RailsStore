@@ -30,6 +30,7 @@ class Backbone.RailsStore
   _defaultFormats:
     DateTime: 'dd/MM/yyyy HH:mm:ss'
     Date: 'dd/MM/yyyy'
+    Boolean: ['Não', 'Sim']
   _dateFormats: [
     'yyyy-MM-dd',
     'd/M/yyyy','dd/M/yyyy','d/MM/yyyy','dd/MM/yyyy',
@@ -857,6 +858,7 @@ class Backbone.RailsModel extends Backbone.Model
 
       DateTime
       Date
+      Boolean
 
       Builtin converters accepts a format option
 
@@ -1008,11 +1010,15 @@ class Backbone.RailsModel extends Backbone.Model
           return @attributes[attr].toString(@attributeModifiers[attr].options.format)
         else
           return @attributes[attr].toString(@_store.getBuiltinModifierFormat('DateTime'))
-      if @attributeModifiers[attr].getConverter == 'Date'
+      else if @attributeModifiers[attr].getConverter == 'Date'
         if @attributeModifiers[attr].options and @attributeModifiers[attr].options.format
           return @attributes[attr].toString(@attributeModifiers[attr].options.format)
         else
           return @attributes[attr].toString(@_store.getBuiltinModifierFormat('Date'))
+      else if @attributeModifiers[attr].getConverter == 'Boolean'
+        modifier = @_store.getBuiltinModifierFormat('Boolean')
+        return modifier[1] if @attributes[attr]
+        return modifier[0] if not @attributes[attr] or @attributes[attr] == 'false'
 
     # If we have, deliver
     val = super
@@ -1306,6 +1312,9 @@ class Backbone.RailsModel extends Backbone.Model
             attr[key] = value
           else if value
             attr[key] = Date.parseExact(value, @_store.getDateFormats())
+        else if @attributeModifiers[key].getConverter == 'Boolean'
+          return 1 if value
+          return 0 if not value or value == 'false'
         else if _.isFunction(@attributeModifiers[key].getConverter)
           attr[key] = @attributeModifiers[key].getConverter(value)
     return attr
