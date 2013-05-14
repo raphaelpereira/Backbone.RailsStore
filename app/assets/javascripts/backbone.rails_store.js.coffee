@@ -1019,6 +1019,8 @@ class Backbone.RailsModel extends Backbone.Model
         modifier = @_store.getBuiltinModifierFormat('Boolean')
         return modifier[1] if @attributes[attr]
         return modifier[0] if not @attributes[attr] or @attributes[attr] == 'false'
+      else if _.isFunction(@attributeModifiers[attr].getConverter)
+        return @attributeModifiers[attr].getConverter(@attributes[attr])
 
     # If we have, deliver
     val = super
