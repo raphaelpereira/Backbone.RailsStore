@@ -323,6 +323,7 @@ class BackboneRailsStoreController < ApplicationController
         f = klass.create()
         data = {field.to_sym => request.request_parameters[:qqfile]}
         f.update_attributes(data)
+        response[:id] = f.id
       end
     rescue ErrorTransportException => exp
       response = {errors: exp.errors}
