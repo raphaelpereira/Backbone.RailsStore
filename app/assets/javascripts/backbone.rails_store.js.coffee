@@ -205,6 +205,7 @@ class Backbone.RailsStore
           @trigger('comm:fatal', e)
           options.error() if options.error
           @trigger('authenticate:failed')
+          throw e
       error: =>
         options.error() if options.error
         @trigger('authenticate:failed')
@@ -307,6 +308,7 @@ class Backbone.RailsStore
           if options.error
             options.error.apply(@,arguments)
           @trigger('find:failed', @)
+          throw e
       error: =>
         if options.error
           options.error.apply(@,arguments)
@@ -404,6 +406,7 @@ class Backbone.RailsStore
           console.log(e)
           @trigger('comm:fatal', e)
           @trigger('commit:failed', {errors: "Communication error!"})
+          throw e
       error: =>
         # TODO: i18n
         errors = {errors: "Communication error!"}
@@ -503,6 +506,7 @@ class Backbone.RailsStore
           console.log(e)
           @trigger('comm:fatal', e)
           @trigger('refresh:failed')
+          throw e
       error: ->
         @trigger('refresh:failed')
 
@@ -520,6 +524,7 @@ class Backbone.RailsStore
       success - method to be executed upon sucess
 
     Response - This method accepts responses with the following data:
+      json - json data to be sent to success and trigger
       models - Models to be stored locally
       relations - Models hasOne and hasAndBelongsToMany relations
 
@@ -543,21 +548,27 @@ class Backbone.RailsStore
       silent: true
       success: (model) =>
         try
-          models = {}
-          @_processServerModelsResponse model,
-            extra: (m) =>
-              modelType = @getModelType(m)
-              unless models[modelType]
-                models[modelType] = []
-              models[modelType].push(m)
-          @_processServerRelationsResponse(model)
-          @reportSyncChanges()
-          @trigger('service:done', models)
-          params.success(models) if _.isFunction(params.success)
+          if model.get('models') or model.get('relations')
+            models = {}
+            @_processServerModelsResponse model,
+              extra: (m) =>
+                modelType = @getModelType(m)
+                unless models[modelType]
+                  models[modelType] = []
+                models[modelType].push(m)
+            @_processServerRelationsResponse(model)
+            @reportSyncChanges()
+            @trigger('service:done', models)
+            params.success(models) if _.isFunction(params.success)
+          else if model.get('json')
+            resp = model.get('json')
+            @trigger('service:done', resp)
+            params.success(resp) if _.isFunction(params.success)
         catch e
           console.log(e)
           @trigger('comm:fatal', e)
           @trigger('service:failed', e)
+          throw e
       error: (resp) =>
         @trigger('service:failed', resp)
     @trigger('service:start', @)
