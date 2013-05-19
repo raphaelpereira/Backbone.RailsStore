@@ -1372,6 +1372,15 @@ class Backbone.RailsCollection extends Backbone.Collection
       success(resp, status, xhr) if success
     super
 
+  add: (model) ->
+    if model instanceof Backbone.RailsModel
+      if model instanceof @model
+        return super
+    else
+      return super
+
+    throw "Invalid model type #{@store.getModelType(model)} for collection #{@}"
+
   _prepareModel: (attrs, options) ->
     if attrs instanceof Backbone.RailsModel
       unless attrs.collection
