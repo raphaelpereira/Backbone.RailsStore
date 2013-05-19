@@ -1178,6 +1178,7 @@ class Backbone.RailsModel extends Backbone.Model
           id = null
         belongsToIds["#{key}_id"] = id
         belongsToIdsCounter++
+        @trigger("change:#{key}", @)
 
       # Check if updating hasOne relation
       klass = _.result(@hasOne, key)
@@ -1199,6 +1200,7 @@ class Backbone.RailsModel extends Backbone.Model
           @_hasOneCache[@cid] = {col: null, ids: []} unless @_hasOneCache[@cid]
           @_hasOneCache[@cid].ids.push(id)
           @_hasOneCache[@cid].col.refresh() if @_hasOneCache[@cid].col
+          @trigger("change:#{key}", @)
 
       # In case trying to update hasMany relation, iterate
       if @hasMany[key]
@@ -1225,6 +1227,9 @@ class Backbone.RailsModel extends Backbone.Model
 
             unless model
               throw "Model should have been refreshed! API BUG!"
+
+            @trigger("change:#{key}", @)
+
 
       # In case trying to update hasAndBelongsToMany relation, iterate
       if @hasAndBelongsToMany[key]
@@ -1258,6 +1263,7 @@ class Backbone.RailsModel extends Backbone.Model
             opts.subset[@cid].ids = _.uniq(opts.subset[@cid].ids.concat(model.cid))
 
           opts.subset[@cid].collection.refresh() if opts.subset[@cid].collection
+          @trigger("change:#{key}", @)
 
     if belongsToIdsCounter
       @set(belongsToIds, options)
