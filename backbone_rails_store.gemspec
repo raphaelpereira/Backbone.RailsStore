@@ -19,6 +19,6 @@ Gem::Specification.new do |s|
   s.add_dependency "rails", ">= 3.1.0"
   s.add_dependency('railties', '>= 3.1.0')
   s.add_dependency('coffee-script', '~> 2.2.0')
-  s.add_dependency('jquery-rails', '~> 2.1')
+  s.add_dependency('jquery-rails', '>= 2.1')
   s.add_dependency('ejs', '~> 1.1.1')
 end
