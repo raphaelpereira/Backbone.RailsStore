@@ -565,6 +565,9 @@ class Backbone.RailsStore
             resp = model.get('json')
             @trigger('service:done', resp)
             params.success(resp) if _.isFunction(params.success)
+          else
+            @trigger('service:done')
+            params.success() if _.isFunction(params.success)
         catch e
           console.log(e)
           @trigger('comm:fatal', e)
