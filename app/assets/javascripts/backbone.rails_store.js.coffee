@@ -118,6 +118,7 @@ class Backbone.RailsStore
     If summond, model will be constructed from server data
   ###
   release: (model, options) ->
+    @stopListening(model)
     col = @getCollectionFromModel(model)
     col.remove(model,options)
     modelType = @getModelType(model)
@@ -601,13 +602,9 @@ class Backbone.RailsStore
     @listenTo model, 'change', (model) => @_registerModelChange(model)
 
   registerDestroyRequest: (model) ->
-    @stopListening model
+    @release(model)
     if model.id
       @_deletedModels.push(model)
-    modelType = @getModelType(model)
-    if @_changedModels[modelType]
-      @_changedModels[modelType] = _.without(@_changedModels[modelType], model)
-
 
   reportSync: (model) ->
     model.syncAttributes = _.clone(model.attributes)
