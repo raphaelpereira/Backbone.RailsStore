@@ -575,6 +575,7 @@ class Backbone.RailsStore
           throw e
       error: (resp) =>
         @trigger('service:failed', resp)
+        params.error(resp) if _.isFunction(params.error)
     @trigger('service:start', @)
     @_doProgress(xhr)
 
