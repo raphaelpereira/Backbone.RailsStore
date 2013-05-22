@@ -1292,7 +1292,6 @@ class Backbone.RailsModel extends Backbone.Model
       # Ignore destroy request on read only models
       return false
     @_store.registerDestroyRequest(@)
-    @collection.remove(@)
     @trigger('destroy', @)
 
   ###
