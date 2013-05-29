@@ -508,7 +508,7 @@ class Backbone.RailsStore
           @trigger('comm:fatal', e)
           @trigger('refresh:failed')
           throw e
-      error: ->
+      error: =>
         @trigger('refresh:failed')
 
     @trigger('refresh:start')
