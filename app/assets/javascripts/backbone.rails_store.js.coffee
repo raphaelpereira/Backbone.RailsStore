@@ -847,7 +847,7 @@ class Backbone.RailsModel extends Backbone.Model
     hasAndBelongsToMany:
       blogs:
         modelType: -> BlogClass
-        relationAttribute: users
+        relationAttribute: 'users'
 
     if relationAtrribute is optional. It should be used when relation is defined on
     both models so updated generated on one model is persisted on other
@@ -1151,7 +1151,7 @@ class Backbone.RailsModel extends Backbone.Model
 
     options = options || {}
 
-    belongsToIds = {}
+    belongsToIds = {keys: {}, objs: []}
     belongsToIdsCounter = 0;
 
     modelAttributes = @_cleanUpRelations(attributes)
@@ -1177,9 +1177,13 @@ class Backbone.RailsModel extends Backbone.Model
             id = model.id || model.cid
         else
           id = null
-        belongsToIds["#{key}_id"] = id
+        belongsToIds.keys["#{key}_id"] = id
+        belongsToIds.objs.push(key)
         belongsToIdsCounter++
-        @trigger("change:#{key}", @)
+      if belongsToIdsCounter
+        @set(belongsToIds.keys, options)
+        _.each belongsToIds.objs, (key) =>
+          @trigger("change:#{key}", @)
 
       # Check if updating hasOne relation
       klass = _.result(@hasOne, key)
@@ -1265,9 +1269,6 @@ class Backbone.RailsModel extends Backbone.Model
 
           opts.subset[@cid].collection.refresh() if opts.subset[@cid].collection
           @trigger("change:#{key}", @)
-
-    if belongsToIdsCounter
-      @set(belongsToIds, options)
 
     if options.storeSync
       @_store.reportSync(@)
@@ -1532,7 +1533,7 @@ class Backbone.RailsHasManyRelationCollection extends Backbone.RailsRelationColl
 ###
 * Backbone.RailsManyToManyRelationCollection - INTERNAL USE ONLY!
 *
-* This class hangles hasAndBelongsToMany relations
+* This class handles hasAndBelongsToMany relations
 ###
 class Backbone.RailsManyToManyRelationCollection extends Backbone.RailsRelationCollection
   _store: null

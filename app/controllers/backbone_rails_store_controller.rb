@@ -116,7 +116,8 @@ class BackboneRailsStoreController < ApplicationController
         models = params[:refreshModels]
 
         if models
-          response.merge!(refreshModels(models))
+          extra_models = refreshModels(models)
+          response = extra_models.merge(response)
         end
       end
 
