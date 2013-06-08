@@ -104,8 +104,18 @@ class BackboneRailsStoreController < ApplicationController
               end
               response[:models][relation_class.to_s] = [] unless response[:models][relation_class.to_s]
               response[:models][relation_class.to_s].concat(relation_objs)
-              fill_eager_refresh relation_class, relation_objs, response
+              fill_eager_refresh relation_class.constantize, relation_objs, response
             end
+          end
+        end
+      end
+
+      # Models to be fetched
+      models = params[:refreshModels]
+      if models
+        response.merge!(refreshModels(models)) do |key, v1, v2|
+          v1.merge!(v2) do |key, v3, v4|
+            v3.concat(v4)
           end
         end
       end
