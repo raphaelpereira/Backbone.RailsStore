@@ -630,6 +630,8 @@ class Backbone.RailsStore
     else if model instanceof Backbone.RailsCollection
       return model.model.prototype.railsClass
     else
+      unless model
+        throw "No Model Type information available! Take a look at your Model declaration!"
       unless model.prototype.railsClass
         if model.prototype.model or not model.prototype.model.prototype.railsClass
           return  model.prototype.model.prototype.railsClass
@@ -1062,6 +1064,9 @@ class Backbone.RailsModel extends Backbone.Model
       @_hasOneCache[@cid] = {col: null, ids: []} unless @_hasOneCache[@cid]
       unless @_hasOneCache[@cid].col
         if options.remoteRefresh
+          remoteRefresh = true
+        else if options.remoteRefresh == undefined
+          options.remoteRefresh = 'first'
           remoteRefresh = true
         else
           remoteRefresh = false
