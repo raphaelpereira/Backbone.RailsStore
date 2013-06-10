@@ -98,13 +98,20 @@ class BackboneRailsStoreController < ApplicationController
             } unless resp_relations[model_type][relation_type]
 
             model_class.where(:id => model_info[:ids]).each do |model|
-              relation_objs = model.send(relation_attribute)
-              resp_relations[model_type][relation_type][:models][model.id] = relation_objs.map do |rm|
-                rm.id
-              end
+              relation_result = model.send(relation_attribute)
+              next unless relation_result
               response[:models][relation_class.to_s] = [] unless response[:models][relation_class.to_s]
-              response[:models][relation_class.to_s].concat(relation_objs)
-              fill_eager_refresh relation_class.constantize, relation_objs, response
+              if relation_result.respond_to?(:map)
+                resp_relations[model_type][relation_type][:models][model.id] = relation_result.map do |rm|
+                  rm.id
+                end
+                response[:models][relation_class.to_s].concat(relation_result)
+                fill_eager_refresh relation_class.constantize, relation_result, response
+              else
+                resp_relations[model_type][relation_type][:models][model.id] = [relation_result.id]
+                response[:models][relation_class.to_s].push(relation_result)
+                fill_eager_refresh relation_class.constantize, [relation_result], response
+              end
             end
           end
         end
@@ -167,6 +174,7 @@ class BackboneRailsStoreController < ApplicationController
               page_data[model_info[:railsClass]][:ids].push(m.id)
               if limit == 0 or (limit_low <= counter and counter <= limit_high)
                 response[:models][model_info[:railsClass]].push(m)
+                counter += 1 unless limit == 0
               end
             end
             fill_eager_refresh rails_class, response[:models][model_info[:railsClass]], response
@@ -379,22 +387,29 @@ class BackboneRailsStoreController < ApplicationController
   end
 
   def fill_eager_refresh klass, models, models_eager
-    return unless klass.respond_to?(:rails_store_eager)
+    return unless klass.respond_to?(:rails_store_eager) and models.length > 0
     klass.rails_store_eager.each do |relation|
       relation_reflection = klass.reflect_on_association(relation)
       raise "Invalid relation #{relation} on #{klass}!" unless relation_reflection
       relation_class = relation_reflection.class_name.to_s
       models_eager[:models][relation_class] = [] unless models_eager[:models][relation_class]
-      relation_objs = models.map do |obj|
-        obj.send(relation)
-      end.flatten
-      relation_ids = relation_objs.map do |obj|
-        models_eager[:models][relation_class].push(obj)
-        obj.id
+      relation_ids = []
+      models.each do |obj|
+        model_relation_result = obj.send(relation)
+        if model_relation_result.respond_to?(:map)
+          arr = model_relation_result.map do |relation_obj|
+            models_eager[:models][relation_class].push(relation_obj)
+            {:id => obj.id, :relation_id => relation_obj.id}
+          end
+          relation_ids.concat arr
+        else
+          models_eager[:models][relation_class].push(model_relation_result) unless model_relation_result == nil
+        end
       end
       models_eager[:models][relation_class].uniq!
       case relation_reflection.macro
         when :has_and_belongs_to_many, :has_one
+          models_eager[:relations] = {} unless models_eager[:relations]
           models_eager[:relations][klass.to_s] = {} unless models_eager[:relations][klass.to_s]
           models_eager[:relations][klass.to_s][relation_class] = {
               :attribute => relation,
@@ -402,8 +417,8 @@ class BackboneRailsStoreController < ApplicationController
           } unless models_eager[:relations][klass.to_s][relation_class]
           rmodels = models_eager[:relations][klass.to_s][relation_class][:models]
           relation_ids.each do |mid|
-            rmodels[mid.id] = [] unless rmodels[mid.id]
-            rmodels[mid.id].push(mid.relation_id)
+            rmodels[mid[:id]] = [] unless rmodels[mid[:id]]
+            rmodels[mid[:id]].push(mid[:relation_id])
           end
       end
       fill_eager_refresh(relation_reflection.klass, models_eager[:models][relation_class], models_eager)
