@@ -122,6 +122,20 @@ class Backbone.RailsStore
     col = @getCollectionFromModel(model)
     col.remove(model,options)
     modelType = @getModelType(model)
+    modelClass = @_getModelTypeObj(modelType)
+    if modelClass.prototype.hasMany
+      _.each modelClass.prototype.hasMany, (data, key) =>
+        if data.subset and data.subset[model.cid]
+          data.subset[model.cid].dispose()
+          data.subset[model.cid].off()
+          delete data.subset[model.cid]
+    if modelClass.prototype.hasAndBelongsToMany
+      _.each modelClass.prototype.hasAndBelongsToMany, (data, key) =>
+        if data.subset and data.subset[model.cid]
+          if data.subset[model.cid].collection
+            data.subset[model.cid].collection.dispose()
+            data.subset[model.cid].collection.off()
+          delete data.subset[model.cid]
     @_changedModels[modelType] = _.without(@_changedModels[modelType], model) if @_changedModels[modelType]
     @_deletedModels = _.without(@_deletedModel, model) if @_deletedModels
     modelId = model.id if model.id
