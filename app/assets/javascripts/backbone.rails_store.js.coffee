@@ -1331,10 +1331,13 @@ class Backbone.RailsModel extends Backbone.Model
     _.each attr, (value, key) =>
       if @attributeModifiers[key]
         if @attributeModifiers[key].getConverter == 'DateTime'
-          attr[key] = Date.parse(value) if value
+          if value instanceof Date
+            attr[key] = new Date(value.getTime())
+          else if value
+            attr[key] = Date.parse(value)
         else if @attributeModifiers[key].getConverter == 'Date'
           if value instanceof Date
-            attr[key] = value
+            attr[key] = new Date(value.getTime())
           else if value
             attr[key] = Date.parseExact(value, @_store.getDateFormats())
         else if @attributeModifiers[key].getConverter == 'Boolean'
