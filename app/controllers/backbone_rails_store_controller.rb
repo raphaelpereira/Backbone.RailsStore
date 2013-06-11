@@ -387,26 +387,43 @@ class BackboneRailsStoreController < ApplicationController
   end
 
   def fill_eager_refresh klass, models, models_eager
-    return unless klass.respond_to?(:rails_store_eager) and models.length > 0
+    return unless models.length > 0
+    model_ids = models.map do |model|
+      model.id
+    end
+    models_eager_ids = {:model_ids => {}, :relations => {}}
+    fill_eager_refresh_ids klass, model_ids, models_eager_ids
+    models_eager_ids[:model_ids].each do |other_klass, ids|
+      models_eager[:models][other_klass] = other_klass.constantize.where(:id => ids)
+    end
+    models_eager[:relations] = {} unless models_eager[:relations]
+    models_eager[:relations].merge!(models_eager_ids[:relations]) do |key, v1, v2|
+      v1.merge!(v2) do |key, v1, v2|
+        v1[:models].merge!(v2[:models]) do |key, v1, v2|
+          v1.concat(v2)
+          v1
+        end
+      end
+    end
+  end
+
+  def fill_eager_refresh_ids klass, ids, models_eager
+    return unless (klass.respond_to?(:rails_store_eager) and ids.length > 0)
     klass.rails_store_eager.each do |relation|
       relation_reflection = klass.reflect_on_association(relation)
       raise "Invalid relation #{relation} on #{klass}!" unless relation_reflection
       relation_class = relation_reflection.class_name.to_s
-      models_eager[:models][relation_class] = [] unless models_eager[:models][relation_class]
-      relation_ids = []
-      models.each do |obj|
-        model_relation_result = obj.send(relation)
-        if model_relation_result.respond_to?(:map)
-          arr = model_relation_result.map do |relation_obj|
-            models_eager[:models][relation_class].push(relation_obj)
-            {:id => obj.id, :relation_id => relation_obj.id}
-          end
-          relation_ids.concat arr
-        else
-          models_eager[:models][relation_class].push(model_relation_result) unless model_relation_result == nil
-        end
+      models_eager[:model_ids][relation_class] = [] unless models_eager[:model_ids][relation_class]
+      query_opts = {}
+      query_opts[:conditions] = {:id => ids.uniq}
+      query_opts[:joins] = relation
+      query_opts[:select] = "#{klass.table_name}.id as id, #{relation_reflection.klass.table_name}.id as relation_id"
+      model_relation_ids = klass.all(query_opts)
+      relation_ids = model_relation_ids.map do |relation_info|
+        models_eager[:model_ids][relation_class].push(relation_info.relation_id)
+        relation_info.relation_id
       end
-      models_eager[:models][relation_class].uniq!
+      models_eager[:model_ids][relation_class].uniq!
       case relation_reflection.macro
         when :has_and_belongs_to_many, :has_one
           models_eager[:relations] = {} unless models_eager[:relations]
@@ -416,12 +433,12 @@ class BackboneRailsStoreController < ApplicationController
               :models => {}
           } unless models_eager[:relations][klass.to_s][relation_class]
           rmodels = models_eager[:relations][klass.to_s][relation_class][:models]
-          relation_ids.each do |mid|
+          model_relation_ids.each do |mid|
             rmodels[mid[:id]] = [] unless rmodels[mid[:id]]
             rmodels[mid[:id]].push(mid[:relation_id])
           end
       end
-      fill_eager_refresh(relation_reflection.klass, models_eager[:models][relation_class], models_eager)
+      fill_eager_refresh_ids(relation_reflection.klass, relation_ids, models_eager)
     end
   end
 
