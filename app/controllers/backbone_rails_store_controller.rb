@@ -327,6 +327,7 @@ class BackboneRailsStoreController < ApplicationController
         field = params[:railsAttr]
         f = klass.create()
         data = {field.to_sym => request.request_parameters[:qqfile]}
+        data.merge!(params[:modelParams]) if params[:modelParams]
         f.update_attributes(data)
         response[:id] = f.id
       end
