@@ -719,7 +719,7 @@ class Backbone.RailsStore
 
   _doProgress: (xhr) ->
     @_requests.push(xhr)
-    if @_progressCounter <= 0 and @_progressElement
+    if @_progressCounter >= 0 and @_progressElement
       @_progressElement.show()
     @_progressCounter++
     xhr.always =>
@@ -1077,11 +1077,14 @@ class Backbone.RailsModel extends Backbone.Model
       @_hasOneCache = {} unless @_hasOneCache
       @_hasOneCache[@cid] = {col: null, ids: []} unless @_hasOneCache[@cid]
       unless @_hasOneCache[@cid].col
+        if options.remoteRefresh == undefined
+          options.remoteRefresh = 'unless'
+
         if options.remoteRefresh
-          remoteRefresh = true
-        else if options.remoteRefresh == undefined
-          options.remoteRefresh = 'first'
-          remoteRefresh = true
+          if @_hasOneCache[@cid].ids.length and options.remoteRefresh == 'unless'
+            remoteRefresh = false
+          else
+            remoteRefresh = true
         else
           remoteRefresh = false
         relationModelType = _.result(@hasOne, attr)
@@ -1094,7 +1097,7 @@ class Backbone.RailsModel extends Backbone.Model
           hasOneCache: @_hasOneCache
           relationModelType: relationModelType
           attribute: attr
-      else if options.remoteRefresh and options.remoteRefresh != 'first'
+      else if options.remoteRefresh and options.remoteRefresh != 'first' and options.remoteRefresh != 'unless'
         @_hasOneCache[@cid].col.remoteRefresh
           lazyLoad: options.lazyLoad
       else if _.isFunction(options.lazyLoad)
@@ -1222,7 +1225,7 @@ class Backbone.RailsModel extends Backbone.Model
               throw "Valid not yet supported! Please consider reporting this bug with Object type"
           @_hasOneCache = {} unless @_hasOneCache
           @_hasOneCache[@cid] = {col: null, ids: []} unless @_hasOneCache[@cid]
-          @_hasOneCache[@cid].ids.push(id)
+          @_hasOneCache[@cid].ids = [id]
           @_hasOneCache[@cid].col.refresh() if @_hasOneCache[@cid].col
           @trigger("change:#{key}", @)
 
@@ -1571,6 +1574,8 @@ class Backbone.RailsManyToManyRelationCollection extends Backbone.RailsRelationC
     @parent.on 'remove', (model) => @_onChildRemove(model)
     @child.on 'remove', (model) => @_onChildRemove(model)
     @child.clear = => @clear()
+    @child.comparator = (model) =>
+      return @relation.subset[@relatedModel.cid].ids.indexOf(model.cid)
 
   clear: ->
     modelsToRemove = []
