@@ -537,6 +537,7 @@ class Backbone.RailsStore
       params - Other parameters to send to controller
       type - Type of call. Defaults to 'POST'
       success - method to be executed upon sucess
+      error - method to be executed upon error
 
     Response - This method accepts responses with the following data:
       json - json data to be sent to success and trigger
@@ -586,6 +587,7 @@ class Backbone.RailsStore
           console.log(e)
           @trigger('comm:fatal', e)
           @trigger('service:failed', e)
+          params.error(resp) if _.isFunction(params.error)
           throw e
       error: (resp) =>
         @trigger('service:failed', resp)
