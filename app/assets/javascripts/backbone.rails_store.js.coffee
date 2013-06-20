@@ -970,7 +970,7 @@ class Backbone.RailsModel extends Backbone.Model
   ###
   syncChangedAttributes: (attr) ->
     changed = {}
-    parsedAttr = @_parseAttributeModifiers(attr)
+    parsedAttr = @_parseAttributeModifiers(_.clone(attr))
     _.each parsedAttr, (value, key) =>
       unless (@belongsTo[key] or @hasMany[key] or @hasAndBelongsToMany[key] or @hasOne[key])
         if _.isArray(@syncAttributes[key]) and _.isArray(value)
