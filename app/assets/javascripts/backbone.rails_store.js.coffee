@@ -758,7 +758,7 @@ class Backbone.RailsStore
       serverModel.trigger('refresh:done', serverModel)
       return serverModel
     else
-      # Must check if conflicts
+      # Must check for conflicts
       serverData = storedModel.parse(model)
       syncAttr = storedModel.syncAttributes
       serverChangedAttr = storedModel.syncChangedAttributes(serverData)
@@ -777,6 +777,9 @@ class Backbone.RailsStore
         storedModel.trigger('change', storedModel)
         @reportSync(storedModel)
         storedModel.syncAttributes = _.extend(syncAttr, noConflictAttr)
+        localChangedAttr = storedModel.syncChangedAttributes(storedModel.attributes)
+        if localChangedAttr
+          @_registerModelChange(storedModel)
         if hasConflict
           storedModel.trigger("refresh:conflict", storedModel)
           return storedModel
@@ -785,7 +788,7 @@ class Backbone.RailsStore
       else if serverChangedAttr
         storedModel.set(serverChangedAttr, {storeSync:true, silent:true})
         storedModel.trigger('change', storedModel)
-      @reportSync(storedModel)
+        @reportSync(storedModel)
 
       storedModel.trigger('refresh:done', storedModel)
       return storedModel
@@ -798,7 +801,7 @@ class Backbone.RailsStore
     unless model.railsClass
       return false
     modelType = @getModelType(model)
-    unless _.isEqual model.syncAttributes, model.attributes
+    if model.syncChangedAttributes(model.attributes)
       @_changedModels[modelType] = [] unless @_changedModels[modelType]
       @_changedModels[modelType].push(model)
       @_changedModels[modelType] = _.uniq(@_changedModels[modelType])
@@ -931,19 +934,6 @@ class Backbone.RailsModel extends Backbone.Model
     @_store.refresh options
 
   ###
-    changedAttributes - override to treat relations
-  ###
-  changedAttributes: (attr) ->
-    changedAttr = super
-    if attr? and changedAttr
-      _.each changedAttr, (value, key) =>
-        # TODO: Should iterate over hasMany to check if it has changed
-        if @belongsTo[key] or @hasOne[key] or @hasMany[key] or @hasAndBelongsToMany[key]
-          delete changedAttr[key]
-      changedAttr = false if _.isEmpty(changedAttr)
-    return changedAttr
-
-  ###
     setPersistent - change persistent model state
 
     Models marked as persistent are not released from Store upon releaseAll call
@@ -980,13 +970,17 @@ class Backbone.RailsModel extends Backbone.Model
   ###
   syncChangedAttributes: (attr) ->
     changed = {}
-    _.each attr, (value, key) =>
+    parsedAttr = @_parseAttributeModifiers(attr)
+    _.each parsedAttr, (value, key) =>
       unless (@belongsTo[key] or @hasMany[key] or @hasAndBelongsToMany[key] or @hasOne[key])
         if _.isArray(@syncAttributes[key]) and _.isArray(value)
           diff = _.difference(@syncAttributes[key], value)
           if diff.length
             changed[key] = attr[key]
-        else if @syncAttributes[key] != attr[key]
+        else if value instanceof Date
+          unless (@syncAttributes[key] instanceof Date and Date.equals(@syncAttributes[key], value))
+            changed[key] = attr[key]
+        else if @syncAttributes[key] != value
           changed[key] = attr[key]
       else
         changed[key] = attr[key]
