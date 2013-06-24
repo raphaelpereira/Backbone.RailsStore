@@ -29,7 +29,8 @@ class BackboneRailsStoreController < ApplicationController
       ActiveRecord::Base.transaction do
         if params[:authModel]
           klass = params[:authModel][:railsClass]
-          model = klass.constantize.where(:login => params[:authModel][:model][:login]).first
+          model = acl_scoped_class(klass, :read).where(:login => params[:authModel][:model][:login], :active => true).first
+          raise_error_hash(klass, 'no read permission') unless model
           if model
             token = params[:authModel][:model][:token]
             hash = Digest::SHA1.hexdigest("#{token}#{model.password}")
@@ -39,7 +40,7 @@ class BackboneRailsStoreController < ApplicationController
                   :railsClass => klass,
                   :id => model.id
               }
-              response.merge! (refreshModels({
+              response.merge! (refresh_models({
                   :"#{klass}" => {
                       :railsClass => klass,
                       :ids => [model.id]
@@ -87,7 +88,7 @@ class BackboneRailsStoreController < ApplicationController
 
           # TODO: Optimize!
           relations.each do |model_type, model_info|
-            model_class = model_info[:railsClass].constantize
+            model_class = acl_scoped_class(model_info[:railsClass], :read)
             relation_type = model_info[:relationType]
             relation_class = model_info[:railsRelationClass]
             relation_attribute = model_info[:railsRelationAttribute].underscore.to_sym
@@ -106,11 +107,11 @@ class BackboneRailsStoreController < ApplicationController
                   rm.id
                 end
                 response[:models][relation_class.to_s].concat(relation_result)
-                fill_eager_refresh relation_class.constantize, relation_result, response
+                fill_eager_refresh relation_class, relation_result, response
               else
                 resp_relations[model_type][relation_type][:models][model.id] = [relation_result.id]
                 response[:models][relation_class.to_s].push(relation_result)
-                fill_eager_refresh relation_class.constantize, [relation_result], response
+                fill_eager_refresh relation_class, [relation_result], response
               end
             end
           end
@@ -120,7 +121,7 @@ class BackboneRailsStoreController < ApplicationController
       # Models to be fetched
       models = params[:refreshModels]
       if models
-        response.merge!(refreshModels(models)) do |key, v1, v2|
+        response.merge!(refresh_models(models)) do |key, v1, v2|
           v1.merge!(v2) do |key, v3, v4|
             v3.concat(v4)
           end
@@ -149,7 +150,7 @@ class BackboneRailsStoreController < ApplicationController
           models = [models] if not models.kind_of?(Array)
           page_data = response[:pageData] = {}
           models.each do |model_info|
-            rails_class = model_info[:railsClass].constantize
+            rails_class = acl_scoped_class(model_info[:railsClass], :read)
             result = rails_class.rails_store_search(model_info[:searchParams])
             page = model_info[:page].to_i
             page = 1 if page == 0
@@ -177,7 +178,7 @@ class BackboneRailsStoreController < ApplicationController
                 counter += 1 unless limit == 0
               end
             end
-            fill_eager_refresh rails_class, response[:models][model_info[:railsClass]], response
+            fill_eager_refresh model_info[:railsClass], response[:models][model_info[:railsClass]], response
           end
         end
 
@@ -207,14 +208,15 @@ class BackboneRailsStoreController < ApplicationController
             klass = model_info[:railsClass]
             model_info[:data].each do |model|
               if model['id']
-                server_model = klass.constantize.find(model['id'])
+                server_model = acl_scoped_class(klass, :write).find(model['id'])
+                raise_error_hash(klass, 'no write permission') unless server_model
               else
                 server_model = klass.constantize.create(model)
-                raise_error(server_model) if not server_model.errors.empty?
+                raise_error(server_model) unless server_model.errors.empty?
                 new_models[model['cid']] = server_model
                 models_ids[key.to_sym] = {} unless models_ids[key.to_sym]
                 models_ids[key.to_sym][:"#{model['cid']}"] = server_model.id
-                params[:refreshModels] = {} if not params[:refreshModels]
+                params[:refreshModels] = {} unless params[:refreshModels]
                 params[:refreshModels][key] = {
                     :railsClass => klass,
                     :ids => []
@@ -223,7 +225,7 @@ class BackboneRailsStoreController < ApplicationController
               end
 
               updated = server_model.update_attributes(model)
-              raise_error(server_model) if not updated
+              raise_error(server_model) unless updated
 
               model.each do |attr_key, attr|
                 if attr_key.match(/.*_id$/)
@@ -241,7 +243,7 @@ class BackboneRailsStoreController < ApplicationController
                 end
               end
               saved = server_model.save
-              raise_error(server_model) if not saved
+              raise_error(server_model) unless saved
             end
           end
 
@@ -251,7 +253,7 @@ class BackboneRailsStoreController < ApplicationController
             params[:refreshModels][info[:key]] = {
                 :railsClass => info[:railsClass],
                 :ids => []
-            } if not params[:refreshModels][info[:key]]
+            } unless params[:refreshModels][info[:key]]
             params[:refreshModels][info[:key]][:ids].push(info[:model].id)
             raise_error(info[:model]) unless saved
           end
@@ -263,7 +265,7 @@ class BackboneRailsStoreController < ApplicationController
           models.each do |key, model_info|
             model_info.each do |model|
               if model['id']
-                key.constantize.destroy(model['id'])
+                acl_scoped_class(key, :remove).destroy(model['id'])
               end
             end
           end
@@ -277,8 +279,9 @@ class BackboneRailsStoreController < ApplicationController
             data[:models].each do |id, data|
               data.each do |relation, data|
                 relation_klass = data[:railsClass]
-                new_relations = relation_klass.constantize.where(:id => data[:ids])
-                model = klass.constantize.find(id)
+                new_relations = acl_scoped_class(relation_klass, :read).where(:id => data[:ids])
+                model = acl_scoped_class(klass, :write).find(id)
+                raise_error_hash(klass, 'no write permission') unless model
                 actual_relations = model.send("#{relation}")
                 new_relations.each do |relation|
                   actual_relations.push relation unless actual_relations.include?(relation)
@@ -297,17 +300,21 @@ class BackboneRailsStoreController < ApplicationController
               data.each do |relation, data|
                 next if data.nil?
                 data[:ids] = [] if data[:ids].nil? or not data[:ids].is_a?(Array)
-                relation_array = klass.constantize.find(id).send("#{relation}")
+                model = acl_scoped_class(klass, :read).find(id)
+                raise_error_hash(klass, 'no read permission') unless model
+                relation_array = model.send("#{relation}")
                 result_relations = relation_array.reject do |relation_model|
                   data[:ids].include?(relation_model.id)
                 end
-                klass.constantize.find(id).send("#{relation}=", result_relations)
+                model = acl_scoped_class(klass, :write).find(id)
+                raise_error_hash(klass, 'no write permission') unless model
+                model.send("#{relation}=", result_relations)
               end
             end
           end
         end
 
-        response.merge!(refreshModels(params[:refreshModels])) if params[:refreshModels]
+        response.merge!(refresh_models(params[:refreshModels])) if params[:refreshModels]
       end
 
     rescue ErrorTransportException => exp
@@ -354,7 +361,11 @@ class BackboneRailsStoreController < ApplicationController
     raise ErrorTransportException.new(errors), "Doh!"
   end
 
-  def refreshModels models
+  def raise_error_hash(class_name, errors)
+    raise ErrorTransportException.new({:railsClass => class_name, :errors => errors})
+  end
+
+  def refresh_models models
     response = {
         :models => {},
         :relations => {}
@@ -366,8 +377,8 @@ class BackboneRailsStoreController < ApplicationController
     models.each do |key, model_info|
       # TODO: in case model has been erased on server, notify
       ids = model_info[:ids] || []
-      model_class = model_info[:railsClass].constantize
-      server_models = model_class.where(:id => ids.uniq)
+      model_class = model_info[:railsClass]
+      server_models = acl_scoped_class(model_class, :read).where(:id => ids.uniq)
       models_eager = {:models => {}, :relations => {}}
       fill_eager_refresh model_class, server_models, models_eager
       resp_models[model_info[:railsClass]] = server_models
@@ -384,7 +395,7 @@ class BackboneRailsStoreController < ApplicationController
       end
     end
 
-    return response
+    response
   end
 
   def fill_eager_refresh klass, models, models_eager
@@ -408,18 +419,21 @@ class BackboneRailsStoreController < ApplicationController
     end
   end
 
-  def fill_eager_refresh_ids klass, ids, models_eager
+  def fill_eager_refresh_ids klass_name, ids, models_eager
+    klass = klass_name.constantize
     return unless (klass.respond_to?(:rails_store_eager) and ids.length > 0)
+    klass_scoped = acl_scoped_class(klass_name, :read)
     klass.rails_store_eager.each do |relation|
       relation_reflection = klass.reflect_on_association(relation)
       raise "Invalid relation #{relation} on #{klass}!" unless relation_reflection
       relation_class = relation_reflection.class_name.to_s
       models_eager[:model_ids][relation_class] = [] unless models_eager[:model_ids][relation_class]
       query_opts = {}
+      query_opts[:order] = relation_reflection.options[:order]
       query_opts[:conditions] = {:id => ids.uniq}
       query_opts[:joins] = relation
       query_opts[:select] = "#{klass.table_name}.id as id, #{relation_reflection.klass.table_name}.id as relation_id"
-      model_relation_ids = klass.all(query_opts)
+      model_relation_ids = klass_scoped.all(query_opts)
       relation_ids = model_relation_ids.map do |relation_info|
         models_eager[:model_ids][relation_class].push(relation_info.relation_id)
         relation_info.relation_id
@@ -439,8 +453,14 @@ class BackboneRailsStoreController < ApplicationController
             rmodels[mid[:id]].push(mid[:relation_id])
           end
       end
-      fill_eager_refresh_ids(relation_reflection.klass, relation_ids, models_eager)
+      fill_eager_refresh_ids(relation_class, relation_ids, models_eager)
     end
+  end
+
+  def acl_scoped_class class_name, op
+    klass = class_name.constantize
+    return klass.rails_store_acl_scope(session[:current_user], op) if klass.respond_to?(:rails_store_acl_scope)
+    klass
   end
 
   def sanetize_search_params(params)
