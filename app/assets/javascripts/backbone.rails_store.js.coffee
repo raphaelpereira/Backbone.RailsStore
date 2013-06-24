@@ -195,6 +195,7 @@ class Backbone.RailsStore
         token: token
         hash: hash
 
+    @_storeServer.clear()
     @_storeServer.urlRoot = @_storeServer.authUrlRoot
     xhr = @_storeServer.fetch
       data: $.param({authModel: request})
