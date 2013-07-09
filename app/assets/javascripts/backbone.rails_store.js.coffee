@@ -55,6 +55,7 @@ class Backbone.RailsStore
   _manyToManyCreate: {}
   _manyToManyDestroy: {}
   _requests: []
+  _abortingXhrs: false
 
   ###
     Singleton Pattern
@@ -158,8 +159,10 @@ class Backbone.RailsStore
             hasElements = true
             @release(model, {silent:true})
 
+    @_abortingXhrs = true;
     _.each @_requests, (xhr) =>
       xhr.abort()
+    @_abortingXhrs = false;
     @_requests.length = 0
     @_changedModels = {}
     @_deletedModels = []
@@ -223,6 +226,7 @@ class Backbone.RailsStore
           @trigger('authenticate:failed')
           throw e
       error: =>
+        return if (@_abortingXhrs)
         options.error() if options.error
         @trigger('authenticate:failed')
     @_doProgress(xhr)
@@ -326,6 +330,7 @@ class Backbone.RailsStore
           @trigger('find:failed', @)
           throw e
       error: =>
+        return if (@_abortingXhrs)
         if options.error
           options.error.apply(@,arguments)
         @trigger('find:failed', @)
@@ -425,6 +430,7 @@ class Backbone.RailsStore
           throw e
       error: =>
         # TODO: i18n
+        return if (@_abortingXhrs)
         errors = {errors: "Communication error!"}
         options.error(errors) if options.error
         @trigger('commit:failed', errors)
@@ -524,6 +530,7 @@ class Backbone.RailsStore
           @trigger('refresh:failed')
           throw e
       error: =>
+        return if (@_abortingXhrs)
         @trigger('refresh:failed')
 
     @trigger('refresh:start')
@@ -591,6 +598,7 @@ class Backbone.RailsStore
           params.error(resp) if _.isFunction(params.error)
           throw e
       error: (resp) =>
+        return if (@_abortingXhrs)
         @trigger('service:failed', resp)
         params.error(resp) if _.isFunction(params.error)
     @trigger('service:start', @)
