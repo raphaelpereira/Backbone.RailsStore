@@ -11,13 +11,13 @@ O Backbone.RailsStore tem um objeto Singleton, a *Store*, único no sistema. Est
 
 Para obter a Store:
 
-```javascript
+```avascript
 store = Backbone.RailsStore.getInstance();
 ```
 
 Para buscar objetos no servidor (findRemote):
 
-```javascript
+```JavaScript
 store.findRemote({
    ModelType: SglWeb.Models.Product,
    searchParams: {
@@ -28,25 +28,25 @@ store.findRemote({
    success: function() {/* codigo a ser executado no success */ },
    error: function() {/* código a ser executado no erro*/ }
 });
-```javascript
+```JavaScript
 
 Para gravar no servidor:
 
-```javascript
+```JavaScript
 store.save({
    success: function() {/* código a ser executado no success */},
    error: function() {/* código a ser executado no error */ }
 })
-```javascript
+```JavaScript
 
 e
 
-```javascript
+```JavaScript
 store.commit({
    success: function() {/* código a ser executado no success */},
    error: function() {/* código a ser executado no error */ }
 })
-```javascript
+```JavaScript
 
 A diferença entre o save() e o commit() é que o commit envia também as informações dos models apagados.
 
@@ -54,6 +54,6 @@ Tem um método também para limpar todos os models da memória (*releaseAll()*).
 
 A idéia do RailsStore é criar uma espécie de 'contexto' dentro de uma tela, por exemplo, pensando em uma linha temporal, o usuário entra em uma tela, faz alterações em informações presentes em vários models, e depois salva. Ao salvar são enviadas todas as informações de novos models (para serem criados) e models modificados (para serem alterados) . Depois ao entrar em outro contexto, com carga de novos models, etc, pode ser chamado o método releaseAll() para fazer uma "limpeza" dos models do contexto anterior:
 
-```javascript
+```JavaScript
 Backbone.RailsStore.getInstance().releaseAll();
 ```
