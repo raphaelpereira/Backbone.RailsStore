@@ -11,7 +11,7 @@ O Backbone.RailsStore tem um objeto Singleton, a *Store*, único no sistema. Est
 
 Para obter a Store:
 
-```avascript
+```Javascript
 store = Backbone.RailsStore.getInstance();
 ```
 
@@ -28,7 +28,7 @@ store.findRemote({
    success: function() {/* codigo a ser executado no success */ },
    error: function() {/* código a ser executado no erro*/ }
 });
-```JavaScript
+```
 
 Para gravar no servidor:
 
@@ -37,7 +37,7 @@ store.save({
    success: function() {/* código a ser executado no success */},
    error: function() {/* código a ser executado no error */ }
 })
-```JavaScript
+```
 
 e
 
@@ -46,7 +46,7 @@ store.commit({
    success: function() {/* código a ser executado no success */},
    error: function() {/* código a ser executado no error */ }
 })
-```JavaScript
+```
 
 A diferença entre o save() e o commit() é que o commit envia também as informações dos models apagados.
 
