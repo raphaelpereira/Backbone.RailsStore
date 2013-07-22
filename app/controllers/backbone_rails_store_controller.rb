@@ -406,7 +406,8 @@ class BackboneRailsStoreController < ApplicationController
     models_eager_ids = {:model_ids => {}, :relations => {}}
     fill_eager_refresh_ids klass, model_ids, models_eager_ids
     models_eager_ids[:model_ids].each do |other_klass, ids|
-      models_eager[:models][other_klass] = other_klass.constantize.where(:id => ids)
+      models_eager[:models][other_klass] = [] unless models_eager[:models][other_klass]
+      models_eager[:models][other_klass].concat(other_klass.constantize.where(:id => ids))
     end
     models_eager[:relations] = {} unless models_eager[:relations]
     models_eager[:relations].merge!(models_eager_ids[:relations]) do |key, v1, v2|
@@ -428,11 +429,16 @@ class BackboneRailsStoreController < ApplicationController
       raise "Invalid relation #{relation} on #{klass}!" unless relation_reflection
       relation_class = relation_reflection.class_name.to_s
       models_eager[:model_ids][relation_class] = [] unless models_eager[:model_ids][relation_class]
+      origin_table_name = klass.table_name
+      relation_table_name = relation_reflection.klass.table_name
+      if origin_table_name == relation_table_name
+        relation_table_name = "#{relation.to_s}_#{relation_table_name}"
+      end
       query_opts = {}
       query_opts[:order] = relation_reflection.options[:order]
       query_opts[:conditions] = {:id => ids.uniq}
       query_opts[:joins] = relation
-      query_opts[:select] = "#{klass.table_name}.id as id, #{relation_reflection.klass.table_name}.id as relation_id"
+      query_opts[:select] = "#{origin_table_name}.id as id, #{relation_table_name}.id as relation_id"
       model_relation_ids = klass_scoped.all(query_opts)
       relation_ids = model_relation_ids.map do |relation_info|
         models_eager[:model_ids][relation_class].push(relation_info.relation_id)
