@@ -229,7 +229,7 @@ class Backbone.RailsStore
         return if (@_abortingXhrs)
         options.error() if options.error
         @trigger('authenticate:failed')
-    @_doProgress(xhr)
+    @_doProgress(xhr) unless options.show_progress == false
 
 
   ###
@@ -335,8 +335,8 @@ class Backbone.RailsStore
           options.error.apply(@,arguments)
         @trigger('find:failed', @)
 
-    @trigger('find:start', @)
-    @_doProgress(xhr)
+    @trigger('find:start', @)   
+    @_doProgress(xhr) unless options.show_progress == false
     return @_searchedModels[options.modelType][col_cid].subset.child
 
   ###
@@ -436,7 +436,7 @@ class Backbone.RailsStore
         @trigger('commit:failed', errors)
 
     @trigger('commit:start')
-    @_doProgress(xhr)
+    @_doProgress(xhr) unless options.show_progress == false
 
 
   ###
@@ -534,7 +534,7 @@ class Backbone.RailsStore
         @trigger('refresh:failed')
 
     @trigger('refresh:start')
-    @_doProgress(xhr)
+    @_doProgress(xhr) unless options.show_progress == false
 
   ###
     service - Provides others controllers call
@@ -602,7 +602,7 @@ class Backbone.RailsStore
         @trigger('service:failed', resp)
         params.error(resp) if _.isFunction(params.error)
     @trigger('service:start', @)
-    @_doProgress(xhr)
+    @_doProgress(xhr) unless params.show_progress == false
 
   ###
     Reserved methods
