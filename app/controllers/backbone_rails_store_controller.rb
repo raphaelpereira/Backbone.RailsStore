@@ -354,7 +354,7 @@ class BackboneRailsStoreController < ApplicationController
     end
 
     respond_to do |format|
-      format.json { render json: response }
+      format.json { render json: response.as_json }
     end
   end
 
