@@ -204,6 +204,8 @@ class BackboneRailsStoreController < ApplicationController
           new_models = {}
           set_after_create = []
           models_ids = response[:modelsIds] = {}
+          server_models = []
+          javascript_classes = {}
           models.each do |key, model_info|
             klass = model_info[:railsClass]
             model_info[:data].each do |model|
@@ -211,21 +213,18 @@ class BackboneRailsStoreController < ApplicationController
                 server_model = acl_scoped_class(klass, :write).find(model['id'])
                 raise_error_hash(klass, 'no write permission') unless server_model
               else
-                server_model = klass.constantize.create(model)
-                raise_error(server_model) unless server_model.errors.empty?
+                server_model = klass.constantize.new(model)
+                server_model.cid = model['cid']
                 new_models[model['cid']] = server_model
                 models_ids[key.to_sym] = {} unless models_ids[key.to_sym]
-                models_ids[key.to_sym][:"#{model['cid']}"] = server_model.id
-                params[:refreshModels] = {} unless params[:refreshModels]
-                params[:refreshModels][key] = {
-                    :railsClass => klass,
-                    :ids => []
-                } if not params[:refreshModels][key]
-                params[:refreshModels][key][:ids].push(server_model.id)
+                javascript_classes[klass.to_sym] = key
               end
 
-              updated = server_model.update_attributes(model)
-              raise_error(server_model) unless updated
+              server_models << server_model
+
+              #server_model.assign_attributes(model)
+#              updated = server_model.update_attributes(model)
+#              raise_error(server_model) unless updated
 
               model.each do |attr_key, attr|
                 if attr_key.match(/.*_id$/)
@@ -242,21 +241,54 @@ class BackboneRailsStoreController < ApplicationController
                   end
                 end
               end
-              saved = server_model.save
-              raise_error(server_model) unless saved
+#              saved = server_model.save
+#              raise_error(server_model) unless saved
             end
           end
 
+          #save sequence -
+          server_models.sort { |a,b| compare_server_models(a, b, set_after_create, new_models) }
+
+
+          server_models.each do |server_model|
+            if server_model.new_record?
+              cid = server_model.cid
+              server_model.save
+              raise_error(server_model) unless server_model.errors.empty?
+              key = javascript_classes[server_model.class.name.to_sym]
+              #here: problem if server_model class name is not the same as the javascript model class name
+              models_ids[key.to_sym][:"#{server_model.cid}"] = server_model.id
+              params[:refreshModels] = {} unless params[:refreshModels]
+              params[:refreshModels][key] = {
+                  :railsClass => server_model.class.name,
+                  :ids => []
+              } if not params[:refreshModels][key]
+              params[:refreshModels][key][:ids].push(server_model.id)
+
+              inverse_deps = get_inverse_dependencies cid, set_after_create
+
+              inverse_deps.each do |dep|
+                dep[:model][dep[:attr_name]] = server_model.id
+              end
+            else
+              server_model.save
+              raise_error(server_model) unless server_model.errors.empty?
+            end
+
+
+
+
+          end
+
           set_after_create.each do |info|
-            info[:model][info[:attr]] = new_models[info[:temp_id]].id
-            saved = info[:model].save
             params[:refreshModels][info[:key]] = {
                 :railsClass => info[:railsClass],
                 :ids => []
             } unless params[:refreshModels][info[:key]]
             params[:refreshModels][info[:key]][:ids].push(info[:model].id)
-            raise_error(info[:model]) unless saved
           end
+
+
         end
 
         # Destroy models
@@ -351,6 +383,41 @@ class BackboneRailsStoreController < ApplicationController
 
 
   private
+
+
+  #returns an array this server model depends to be saved (dependencies must be saved before)
+  def get_server_model_dependencies a, dependency_info, new_models
+    dependencies = []
+    dependency_info.each do |info|
+      if a == info[:model]
+        dependencies << new_models[info[:temp_id]]
+      end
+    end
+    dependencies
+  end
+
+  #returns an array of hashes with two props: model and attr_name, of the entities dependent of the one being saved.
+  def get_inverse_dependencies cid, dependency_info
+    dependencies = []
+    dependency_info.each do |info|
+      if cid == info[:temp_id]
+        dependencies << {:model => info[:model], :attr_name => info[:attr]}
+      end
+    end
+    dependencies
+  end
+
+  def compare_server_models a, b, set_after_create, new_models
+    a_dependencies =  get_server_model_dependencies a, set_after_create, new_models
+    if a_dependencies.include?(b)
+      return -1
+    end
+    b_dependencies = get_server_model_dependencies b, set_after_create, new_models
+    if b_dependencies.include?(a)
+      return 1
+    end
+    0
+  end
 
   def raise_error(model)
     errors = {
