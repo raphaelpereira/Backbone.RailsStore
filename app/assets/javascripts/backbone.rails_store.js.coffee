@@ -1037,7 +1037,7 @@ class Backbone.RailsModel extends Backbone.Model
       return result
 
     # Process attributeModifiers
-    if @attributes[attr] and @attributeModifiers[attr] and @attributeModifiers[attr].getConverter
+    if not _.isUndefined(@attributes[attr]) and @attributeModifiers[attr] and @attributeModifiers[attr].getConverter
       if @attributeModifiers[attr].getConverter == 'DateTime'
         if @attributeModifiers[attr].options and @attributeModifiers[attr].options.format
           return @attributes[attr].toString(@attributeModifiers[attr].options.format)
