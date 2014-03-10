@@ -349,11 +349,14 @@ class Backbone.RailsStore
       error - Called upon error
 
     Triggers:
+      commit:before - before starting saving process
       commit:start - just after starting server request
       commit:done - after successful server request response
       commit:failed - if something wrong happened
+      commit:finished - after commit process (success or error)
   ###
   commit: (options) ->
+    @trigger('commit:before', @)
     options = options || {}
     commitData = {}
     _.each @_changedModels, (models, modelType) =>
@@ -427,6 +430,8 @@ class Backbone.RailsStore
           console.log(e)
           @trigger('comm:fatal', e)
           @trigger('commit:failed', {errors: "Communication error!"})
+        finally
+          @trigger('commit:finished', @)
           throw e
       error: =>
         # TODO: i18n
@@ -1039,11 +1044,13 @@ class Backbone.RailsModel extends Backbone.Model
     # Process attributeModifiers
     if not _.isUndefined(@attributes[attr]) and @attributeModifiers[attr] and @attributeModifiers[attr].getConverter
       if @attributeModifiers[attr].getConverter == 'DateTime'
+        return '' if _.isNull(@attributes[attr])
         if @attributeModifiers[attr].options and @attributeModifiers[attr].options.format
           return @attributes[attr].toString(@attributeModifiers[attr].options.format)
         else
           return @attributes[attr].toString(@_store.getBuiltinModifierFormat('DateTime'))
       else if @attributeModifiers[attr].getConverter == 'Date'
+        return '' if _.isNull(@attributes[attr])
         if @attributeModifiers[attr].options and @attributeModifiers[attr].options.format
           return @attributes[attr].toString(@attributeModifiers[attr].options.format)
         else
