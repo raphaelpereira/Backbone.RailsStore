@@ -430,9 +430,9 @@ class Backbone.RailsStore
           console.log(e)
           @trigger('comm:fatal', e)
           @trigger('commit:failed', {errors: "Communication error!"})
+          throw e
         finally
           @trigger('commit:finished', @)
-          throw e
       error: =>
         # TODO: i18n
         return if (@_abortingXhrs)
