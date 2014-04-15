@@ -1060,7 +1060,7 @@ class Backbone.RailsModel extends Backbone.Model
         return modifier[1] if @attributes[attr]
         return modifier[0] if not @attributes[attr] or @attributes[attr] == 'false'
       else if _.isFunction(@attributeModifiers[attr].getConverter)
-        return @attributeModifiers[attr].getConverter(@attributes[attr])
+        return @attributeModifiers[attr].getConverter(@attributes[attr],@)
 
     # If we have, deliver
     val = super
@@ -1373,7 +1373,7 @@ class Backbone.RailsModel extends Backbone.Model
           return 1 if value
           return 0 if not value or value == 'false'
         else if _.isFunction(@attributeModifiers[key].getConverter)
-          attr[key] = @attributeModifiers[key].getConverter(value)
+          attr[key] = @attributeModifiers[key].getConverter(value,@)
     return attr
 
 ###
